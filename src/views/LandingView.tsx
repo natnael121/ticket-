@@ -19,6 +19,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
 
   const publishedEvents = mockDataService.getState().events.filter((e) => e.status === 'published');
 
+  // Detect if current user already has an organisation
+  const userOrg = user?.organizationId
+    ? mockDataService.getOrganization(user.organizationId) || null
+    : null;
+
   const handleTelegramAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualUsername.trim()) return;
@@ -92,27 +97,66 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
         {/* ── Quick Access Section ───────────────────────────────────── */}
         <div className="tg-section__header">Quick Access</div>
         <div className="tg-section">
-          <div className="tg-cell" onClick={() => { triggerHaptic('impact'); onNavigate('organizer_register'); }}>
-            <div className="tg-cell__icon" style={{ background: 'rgba(36,129,204,0.15)' }}>
-              <Building2 style={{ width: 22, height: 22, color: 'var(--tg-accent)' }} />
+          {/* Register / Status — smart based on existing org */}
+          {!userOrg ? (
+            <div className="tg-cell" onClick={() => { triggerHaptic('impact'); onNavigate('organizer_register'); }}>
+              <div className="tg-cell__icon" style={{ background: 'rgba(36,129,204,0.15)' }}>
+                <Building2 style={{ width: 22, height: 22, color: 'var(--tg-accent)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">Register as Organizer</div>
+                <div className="tg-cell__subtitle">Submit company application</div>
+              </div>
+              <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
             </div>
-            <div className="tg-cell__body">
-              <div className="tg-cell__title">Register as Organizer</div>
-              <div className="tg-cell__subtitle">Submit company application</div>
+          ) : userOrg.status === 'pending' ? (
+            <div className="tg-cell" onClick={() => { triggerHaptic('impact'); onNavigate('organizer_register'); }}>
+              <div className="tg-cell__icon" style={{ background: 'rgba(245,166,35,0.15)' }}>
+                <Building2 style={{ width: 22, height: 22, color: 'var(--tg-amber)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">{userOrg.name}</div>
+                <div className="tg-cell__subtitle">⏳ Pending Admin Approval</div>
+              </div>
+              <span className="tg-pill tg-pill--amber" style={{ fontSize: 10 }}>Pending</span>
             </div>
-            <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
-          </div>
+          ) : userOrg.status === 'approved' ? (
+            <div className="tg-cell" onClick={() => { triggerHaptic('impact'); switchUserRole('organizer', userOrg.id); onNavigate('organizer_dashboard'); }}>
+              <div className="tg-cell__icon" style={{ background: 'rgba(77,205,94,0.15)' }}>
+                <Building2 style={{ width: 22, height: 22, color: 'var(--tg-green)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">{userOrg.name}</div>
+                <div className="tg-cell__subtitle">✓ Approved — Go to Dashboard</div>
+              </div>
+              <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
+            </div>
+          ) : (
+            <div className="tg-cell" onClick={() => { triggerHaptic('impact'); onNavigate('organizer_register'); }}>
+              <div className="tg-cell__icon" style={{ background: 'rgba(229,57,53,0.15)' }}>
+                <Building2 style={{ width: 22, height: 22, color: 'var(--tg-red)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">{userOrg.name}</div>
+                <div className="tg-cell__subtitle">✕ Rejected — View Details</div>
+              </div>
+              <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
+            </div>
+          )}
 
-          <div className="tg-cell" onClick={() => { triggerHaptic('impact'); if (role !== 'organizer') switchUserRole('organizer'); onNavigate('organizer_dashboard'); }}>
-            <div className="tg-cell__icon" style={{ background: 'rgba(77,205,94,0.15)' }}>
-              <Users style={{ width: 22, height: 22, color: 'var(--tg-green)' }} />
+          {/* Organizer Dashboard — only show if approved */}
+          {userOrg?.status === 'approved' && (
+            <div className="tg-cell" onClick={() => { triggerHaptic('impact'); switchUserRole('organizer', userOrg.id); onNavigate('organizer_dashboard'); }}>
+              <div className="tg-cell__icon" style={{ background: 'rgba(77,205,94,0.15)' }}>
+                <Users style={{ width: 22, height: 22, color: 'var(--tg-green)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">Organizer Dashboard</div>
+                <div className="tg-cell__subtitle">Manage events & payments</div>
+              </div>
+              <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
             </div>
-            <div className="tg-cell__body">
-              <div className="tg-cell__title">Organizer Dashboard</div>
-              <div className="tg-cell__subtitle">Manage events & payments</div>
-            </div>
-            <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
-          </div>
+          )}
 
           <div className="tg-cell" onClick={() => { triggerHaptic('impact'); onNavigate('my_tickets'); }}>
             <div className="tg-cell__icon" style={{ background: 'rgba(245,166,35,0.15)' }}>
