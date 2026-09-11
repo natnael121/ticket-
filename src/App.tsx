@@ -9,8 +9,10 @@ import { OrganizerDashboardView } from './views/OrganizerDashboardView';
 import { PublicEventView } from './views/PublicEventView';
 import { MyTicketsView } from './views/MyTicketsView';
 import { ScannerView } from './views/ScannerView';
+import { useAuth } from './contexts/AuthContext';
 
 export function AppContent() {
+  const { isSuperAdmin } = useAuth();
   const [currentView, setCurrentView] = useState<string>('landing');
   const [viewParams, setViewParams] = useState<Record<string, string>>({});
 
@@ -27,7 +29,9 @@ export function AppContent() {
         {currentView === 'organizer_register' && <OrganizerRegistrationView onNavigate={handleNavigate} />}
         {currentView === 'organizer_login' && <OrganizerDashboardView onNavigate={handleNavigate} />}
         {currentView === 'organizer_dashboard' && <OrganizerDashboardView onNavigate={handleNavigate} />}
-        {currentView === 'super_admin_dashboard' && <SuperAdminDashboardView onNavigate={handleNavigate} />}
+        {currentView === 'super_admin_dashboard' && (
+          isSuperAdmin ? <SuperAdminDashboardView onNavigate={handleNavigate} /> : <LandingView onNavigate={handleNavigate} />
+        )}
         {currentView === 'public_event' && (
           <PublicEventView eventId={viewParams.eventId || ''} onNavigate={handleNavigate} />
         )}

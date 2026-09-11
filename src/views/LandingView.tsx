@@ -12,7 +12,7 @@ interface LandingViewProps {
 }
 
 export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
-  const { user, role, telegramAuth, switchUserRole } = useAuth();
+  const { user, role, isSuperAdmin, telegramAuth, switchUserRole } = useAuth();
   const { tgUser, triggerHaptic } = useTelegram();
   const [showLoginSheet, setShowLoginSheet] = useState(false);
   const [manualUsername, setManualUsername] = useState('');
@@ -28,10 +28,12 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
     e.preventDefault();
     if (!manualUsername.trim()) return;
     triggerHaptic('success');
+    const cleaned = manualUsername.trim().replace(/^@/, '');
+    const isNum = /^\d+$/.test(cleaned);
     telegramAuth({
-      id: Date.now(),
-      first_name: manualUsername.replace('@', ''),
-      username: manualUsername.replace('@', ''),
+      id: isNum ? Number(cleaned) : Date.now(),
+      first_name: cleaned,
+      username: cleaned,
       role: 'customer'
     });
     setShowLoginSheet(false);
@@ -180,16 +182,26 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
             <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
           </div>
 
-          <div className="tg-cell" onClick={() => { triggerHaptic('impact'); switchUserRole('super_admin'); onNavigate('super_admin_dashboard'); }}>
-            <div className="tg-cell__icon" style={{ background: 'rgba(155,89,182,0.15)' }}>
-              <ShieldCheck style={{ width: 22, height: 22, color: 'var(--tg-purple)' }} />
+          {/* Super Admin Panel - ONLY visible to Super Admins */}
+          {isSuperAdmin && (
+            <div
+              className="tg-cell"
+              onClick={() => {
+                triggerHaptic('impact');
+                switchUserRole('super_admin');
+                onNavigate('super_admin_dashboard');
+              }}
+            >
+              <div className="tg-cell__icon" style={{ background: 'rgba(155,89,182,0.15)' }}>
+                <ShieldCheck style={{ width: 22, height: 22, color: 'var(--tg-purple)' }} />
+              </div>
+              <div className="tg-cell__body">
+                <div className="tg-cell__title">Super Admin Panel</div>
+                <div className="tg-cell__subtitle">Approve organizations & review platform</div>
+              </div>
+              <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
             </div>
-            <div className="tg-cell__body">
-              <div className="tg-cell__title">Super Admin Panel</div>
-              <div className="tg-cell__subtitle">Approve organizations & review platform</div>
-            </div>
-            <ChevronRight className="tg-cell__arrow" style={{ width: 17, height: 17 }} />
-          </div>
+          )}
         </div>
 
         <div className="spacer-8" />
@@ -271,14 +283,14 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
 
               <form onSubmit={handleTelegramAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label className="tg-label">Telegram Username</label>
+                  <label className="tg-label">Telegram Username or User ID</label>
                   <input
                     className="tg-input"
                     type="text"
                     required
                     value={manualUsername}
                     onChange={(e) => setManualUsername(e.target.value)}
-                    placeholder="@your_username"
+                    placeholder="e.g. 123456789 or @username"
                     autoFocus
                   />
                 </div>

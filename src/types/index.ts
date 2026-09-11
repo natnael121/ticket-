@@ -12,6 +12,15 @@ export interface UserProfile {
   createdAt: string;
 }
 
+export interface SuperAdminUser {
+  id: string; // telegramUserId or unique id
+  telegramUserId: string;
+  name?: string;
+  username?: string;
+  addedBy?: string;
+  addedAt: string;
+}
+
 export type OrganizationStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
 
 export interface PaymentMethodConfig {

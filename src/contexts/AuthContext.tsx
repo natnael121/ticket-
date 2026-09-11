@@ -6,6 +6,7 @@ import { mockDataService } from '../services/mockDataService';
 interface AuthContextType {
   user: UserProfile | null;
   role: UserRole;
+  isSuperAdmin: boolean;
   setRole: (role: UserRole) => void;
   organizationId: string | null;
   setOrganizationId: (orgId: string | null) => void;
@@ -20,11 +21,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [role, setRoleState] = useState<UserRole>('customer');
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [, setTick] = useState(0);
 
   const tgUser = getTelegramUser();
 
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (tgUser) {
+      const isInitialSA = mockDataService.isSuperAdmin(tgUser.id, tgUser.username);
       const tgProfile: UserProfile = {
         uid: `tg_${tgUser.id}`,
         email: `${tgUser.username || tgUser.id}@telegram.user`,
@@ -32,7 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: '',
         telegramUserId: String(tgUser.id),
         telegramUsername: tgUser.username,
-        role: 'customer',
+        role: isInitialSA ? 'super_admin' : 'customer',
         createdAt: new Date().toISOString()
       };
       return mockDataService.upsertUserProfile(tgProfile);
@@ -40,13 +43,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
+  // Calculate whether currently authenticated user has Super Admin authority
+  const isSuperAdmin = Boolean(
+    user && mockDataService.isSuperAdmin(user.telegramUserId, user.telegramUsername)
+  );
+
+  // Subscribe to real-time updates from Firestore / mockDataService
+  useEffect(() => {
+    const unsubscribe = mockDataService.subscribe(() => {
+      setTick((t) => t + 1);
+      if (user) {
+        const freshUser = mockDataService.getUserProfile(user.uid);
+        if (freshUser) {
+          setUser(freshUser);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [user]);
+
   useEffect(() => {
     if (user && user.organizationId && !organizationId) {
       setOrganizationId(user.organizationId);
     }
-  }, [user]);
+    if (user && isSuperAdmin && role === 'customer') {
+      setRoleState('super_admin');
+    }
+  }, [user, isSuperAdmin]);
 
   const setRole = (newRole: UserRole) => {
+    if (newRole === 'super_admin' && !isSuperAdmin) {
+      console.warn('Unauthorized attempt to switch to super_admin role denied.');
+      return;
+    }
     setRoleState(newRole);
     if (user) {
       const updated = { ...user, role: newRole };
@@ -59,6 +88,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const activeTg = customTgUser || tgUser;
     if (!activeTg) return;
 
+    const isAuthorizedSA = mockDataService.isSuperAdmin(activeTg.id, activeTg.username);
+    const assignedRole: UserRole = isAuthorizedSA ? 'super_admin' : activeTg.role || 'customer';
+
     const profile: UserProfile = {
       uid: `tg_${activeTg.id || Date.now()}`,
       email: `${activeTg.username || activeTg.id || 'user'}@telegram.user`,
@@ -66,13 +98,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: activeTg.phone || '',
       telegramUserId: String(activeTg.id || Date.now()),
       telegramUsername: activeTg.username,
-      role: activeTg.role || 'customer',
+      role: assignedRole,
       organizationId: activeTg.organizationId,
       createdAt: new Date().toISOString()
     };
 
     setUser(profile);
-    setRoleState(profile.role);
+    setRoleState(assignedRole);
     if (profile.organizationId) {
       setOrganizationId(profile.organizationId);
     }
@@ -80,6 +112,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchUserRole = (targetRole: UserRole, targetOrgId?: string) => {
+    if (targetRole === 'super_admin' && !isSuperAdmin) {
+      console.warn('Unauthorized role switch to super_admin rejected.');
+      return;
+    }
+
     setRoleState(targetRole);
     if (user) {
       const updated = {
@@ -90,7 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(updated);
       mockDataService.upsertUserProfile(updated);
     } else {
-      // Create guest Telegram user
+      const isGuestSA = mockDataService.isSuperAdmin(undefined, undefined);
+      if (targetRole === 'super_admin' && !isGuestSA) {
+        return;
+      }
       const guestProfile: UserProfile = {
         uid: `tg_guest_${Date.now()}`,
         email: `guest_${Date.now()}@telegram.user`,
@@ -128,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         role,
+        isSuperAdmin,
         setRole,
         organizationId,
         setOrganizationId,

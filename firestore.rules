@@ -77,5 +77,11 @@ service cloud.firestore {
     match /scanLogs/{scanLogId} {
       allow read, create: if isSignedIn();
     }
+
+    // Super Admins Collection
+    match /super_admins/{adminId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }

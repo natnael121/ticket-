@@ -1,24 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { mockDataService } from '../services/mockDataService';
-import { Organization } from '../types';
+import { Organization, SuperAdminUser } from '../types';
 import { useTelegram } from '../contexts/TelegramContext';
 import {
   ShieldCheck, Building2, CheckCircle2, XCircle,
-  Users, Ticket, DollarSign, Search, Eye, ChevronLeft, AlertCircle
+  Users, Ticket, DollarSign, Search, ChevronLeft,
+  UserPlus, Trash2, Shield, Info
 } from 'lucide-react';
 
 interface Props { onNavigate: (view: string) => void; }
 
 export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const { triggerHaptic, showAlert } = useTelegram();
-  const [activeTab, setActiveTab] = useState<'pending' | 'all_orgs' | 'transactions'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'all_orgs' | 'transactions' | 'admins'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [rejectionModalOrg, setRejectionModalOrg] = useState<Organization | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  // Add Super Admin Form State
+  const [newAdminTgId, setNewAdminTgId] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminUsername, setNewAdminUsername] = useState('');
+
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    return mockDataService.subscribe(() => setTick((t) => t + 1));
+  }, []);
+
   const stats = mockDataService.getPlatformStats();
   const organizations = mockDataService.getOrganizations();
   const state = mockDataService.getState();
+  const primaryAdminId = mockDataService.getPrimarySuperAdminEnv();
+  const superAdmins = mockDataService.getSuperAdmins();
+
   const pendingOrgs = organizations.filter((o) => o.status === 'pending');
   const filteredOrgs = organizations.filter(
     (o) =>
@@ -31,21 +45,45 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
     triggerHaptic('success');
     mockDataService.updateOrganizationStatus(orgId, 'approved');
     showAlert(`"${orgName}" has been APPROVED!`);
-    window.location.reload();
   };
+
   const handleConfirmReject = () => {
     if (!rejectionModalOrg || !rejectionReason.trim()) return;
     triggerHaptic('error');
     mockDataService.updateOrganizationStatus(rejectionModalOrg.id, 'rejected', rejectionReason);
     showAlert(`"${rejectionModalOrg.name}" has been REJECTED.`);
     setRejectionModalOrg(null);
-    window.location.reload();
   };
+
   const handleSuspend = (orgId: string, orgName: string) => {
     triggerHaptic('warning');
     mockDataService.updateOrganizationStatus(orgId, 'suspended');
     showAlert(`"${orgName}" is now SUSPENDED.`);
-    window.location.reload();
+  };
+
+  const handleAddSuperAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanId = newAdminTgId.trim().replace(/^@/, '');
+    if (!cleanId) return;
+
+    triggerHaptic('success');
+    mockDataService.addSuperAdmin({
+      telegramUserId: cleanId,
+      name: newAdminName.trim() || undefined,
+      username: newAdminUsername.trim() || undefined
+    });
+    showAlert(`Super Admin (ID: ${cleanId}) added successfully!`);
+    setNewAdminTgId('');
+    setNewAdminName('');
+    setNewAdminUsername('');
+  };
+
+  const handleRemoveSuperAdmin = (tgId: string) => {
+    if (confirm(`Remove Super Admin permissions for ID ${tgId}?`)) {
+      triggerHaptic('warning');
+      mockDataService.removeSuperAdmin(tgId);
+      showAlert(`Super Admin ${tgId} removed.`);
+    }
   };
 
   return (
@@ -56,7 +94,7 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
           <ChevronLeft style={{ width: 20, height: 20 }} />
         </button>
         <span className="tg-header__title">Super Admin</span>
-        <span className="tg-pill tg-pill--purple">Admin</span>
+        <span className="tg-pill tg-pill--purple">Root</span>
       </div>
 
       <div className="tg-content">
@@ -108,6 +146,9 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
           <button className={`tg-tab ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>
             Transactions ({state.payments.length})
           </button>
+          <button className={`tg-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
+            Admins ({superAdmins.length + (primaryAdminId ? 1 : 0)})
+          </button>
         </div>
 
         {/* ── Pending Tab ─────────────────────────────────────────────── */}
@@ -123,7 +164,6 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {pendingOrgs.map((org) => (
                   <div key={org.id} style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', overflow: 'hidden' }}>
-                    {/* Org header */}
                     <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ width: 44, height: 44, borderRadius: 'var(--tg-radius-sm)', background: 'rgba(36,129,204,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -137,7 +177,6 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
                       <span className="tg-pill tg-pill--amber">Pending</span>
                     </div>
 
-                    {/* Details */}
                     <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
                         <div style={{ fontSize: 11, color: 'var(--tg-hint)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Owner</div>
@@ -158,7 +197,6 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
                       </div>
                     )}
 
-                    {/* Actions */}
                     <div style={{ padding: '12px 16px', borderTop: '1px solid var(--tg-divider)', display: 'flex', gap: 10 }}>
                       <button className="tg-btn tg-btn--success tg-btn--sm" style={{ flex: 1 }} onClick={() => handleApprove(org.id, org.name)}>
                         <CheckCircle2 style={{ width: 16, height: 16 }} /> Approve
@@ -239,6 +277,132 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── Super Admins Tab ─────────────────────────────────────────── */}
+        {activeTab === 'admins' && (
+          <div>
+            {/* Primary Root Super Admin info */}
+            <div className="tg-section__header">Root Super Admin (.env)</div>
+            <div className="tg-section">
+              <div className="tg-cell" style={{ cursor: 'default' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 'var(--tg-radius-sm)', background: 'rgba(155,89,182,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ShieldCheck style={{ width: 22, height: 22, color: 'var(--tg-purple)' }} />
+                </div>
+                <div className="tg-cell__body">
+                  <div className="tg-cell__title">
+                    {primaryAdminId ? `Telegram ID: ${primaryAdminId}` : 'Not set in .env yet'}
+                  </div>
+                  <div className="tg-cell__subtitle">
+                    Configured via VITE_SUPER_ADMIN_TELEGRAM_ID in .env
+                  </div>
+                </div>
+                <span className="tg-pill tg-pill--purple">Primary</span>
+              </div>
+            </div>
+
+            <div className="spacer-8" />
+
+            {/* Add New Super Admin */}
+            <div className="tg-section__header">Add Super Admin</div>
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '16px' }}>
+              <form onSubmit={handleAddSuperAdmin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label className="tg-label">Telegram User ID *</label>
+                  <input
+                    className="tg-input"
+                    type="text"
+                    required
+                    value={newAdminTgId}
+                    onChange={(e) => setNewAdminTgId(e.target.value)}
+                    placeholder="e.g. 123456789"
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--tg-hint)', marginTop: 4 }}>
+                    The numerical Telegram user ID of the person to authorize as Super Admin.
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="tg-label">Admin Name</label>
+                    <input
+                      className="tg-input"
+                      type="text"
+                      value={newAdminName}
+                      onChange={(e) => setNewAdminName(e.target.value)}
+                      placeholder="e.g. Co-Admin"
+                    />
+                  </div>
+                  <div>
+                    <label className="tg-label">Username (optional)</label>
+                    <input
+                      className="tg-input"
+                      type="text"
+                      value={newAdminUsername}
+                      onChange={(e) => setNewAdminUsername(e.target.value)}
+                      placeholder="e.g. @username"
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="tg-btn tg-btn--primary" style={{ marginTop: 4 }}>
+                  <UserPlus style={{ width: 17, height: 17 }} />
+                  Add Super Admin
+                </button>
+              </form>
+            </div>
+
+            <div className="spacer-8" />
+
+            {/* List of Added Super Admins */}
+            <div className="tg-section__header">
+              Authorized Super Admins ({superAdmins.length})
+            </div>
+            {superAdmins.length === 0 ? (
+              <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '28px 16px', textAlign: 'center' }}>
+                <Shield style={{ width: 36, height: 36, color: 'var(--tg-hint)', margin: '0 auto 8px', opacity: 0.5 }} />
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--tg-text)' }}>No Additional Super Admins</div>
+                <div style={{ fontSize: 12, color: 'var(--tg-hint)', marginTop: 4 }}>
+                  Only the primary super admin from .env is currently active.
+                </div>
+              </div>
+            ) : (
+              <div className="tg-section">
+                {superAdmins.map((admin) => (
+                  <div key={admin.telegramUserId} className="tg-cell" style={{ cursor: 'default' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 'var(--tg-radius-sm)', background: 'rgba(155,89,182,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Shield style={{ width: 20, height: 20, color: 'var(--tg-purple)' }} />
+                    </div>
+                    <div className="tg-cell__body">
+                      <div className="tg-cell__title">
+                        {admin.name || `ID: ${admin.telegramUserId}`}
+                      </div>
+                      <div className="tg-cell__subtitle">
+                        ID: {admin.telegramUserId} {admin.username ? `· @${admin.username}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSuperAdmin(admin.telegramUserId)}
+                      style={{
+                        background: 'rgba(231,76,60,0.12)',
+                        border: 'none',
+                        color: 'var(--tg-red)',
+                        borderRadius: 'var(--tg-radius-sm)',
+                        padding: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="Remove Admin"
+                    >
+                      <Trash2 style={{ width: 16, height: 16 }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
