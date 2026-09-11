@@ -23,6 +23,25 @@ import {
 
 const LOCAL_STORAGE_KEY = 'tik_app_state_clean_v3';
 
+/**
+ * Strips undefined fields recursively so Firestore never rejects payloads with
+ * "Unsupported field value: undefined"
+ */
+function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  if (!obj || typeof obj !== 'object') return obj;
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        clean[key] = sanitizeForFirestore(value);
+      } else {
+        clean[key] = value;
+      }
+    }
+  }
+  return clean;
+}
+
 export interface AppState {
   users: UserProfile[];
   organizations: Organization[];
@@ -231,24 +250,25 @@ class MockDataService {
 
   // ── Super Admin Authorization ───────────────────────────────────────────
   public isSuperAdmin(telegramUserId?: string | number, telegramUsername?: string): boolean {
-    const envSuperAdmin = (import.meta.env.VITE_SUPER_ADMIN_TELEGRAM_ID || '').trim().replace(/^@/, '');
+    const rawEnv = (import.meta.env.VITE_SUPER_ADMIN_TELEGRAM_ID || '').trim();
+    const envClean = rawEnv.replace(/^@/, '').toLowerCase();
 
-    const uidStr = telegramUserId ? String(telegramUserId).trim() : '';
-    const usernameStr = telegramUsername ? telegramUsername.trim().replace(/^@/, '').toLowerCase() : '';
+    const cleanId = telegramUserId ? String(telegramUserId).trim().replace(/^@/, '').toLowerCase() : '';
+    const cleanUsername = telegramUsername ? String(telegramUsername).trim().replace(/^@/, '').toLowerCase() : '';
 
     // Check .env
-    if (envSuperAdmin) {
-      if (uidStr && uidStr === envSuperAdmin) return true;
-      if (usernameStr && usernameStr === envSuperAdmin.toLowerCase()) return true;
+    if (envClean) {
+      if (cleanId && cleanId === envClean) return true;
+      if (cleanUsername && cleanUsername === envClean) return true;
     }
 
     // Check added super admins
     const admins = this.state.superAdmins || [];
     for (const admin of admins) {
-      const adminTgId = String(admin.telegramUserId || admin.id || '').trim();
-      const adminUname = admin.username ? admin.username.trim().replace(/^@/, '').toLowerCase() : '';
-      if (uidStr && adminTgId && uidStr === adminTgId) return true;
-      if (usernameStr && adminUname && usernameStr === adminUname) return true;
+      const adminTgId = String(admin.telegramUserId || admin.id || '').trim().replace(/^@/, '').toLowerCase();
+      const adminUname = admin.username ? String(admin.username).trim().replace(/^@/, '').toLowerCase() : '';
+      if (cleanId && adminTgId && cleanId === adminTgId) return true;
+      if (cleanUsername && adminUname && cleanUsername === adminUname) return true;
     }
 
     return false;
@@ -288,9 +308,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'super_admins', cleanId), newAdmin).catch((err) => {
-        console.error('Failed to save super_admin to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'super_admins', cleanId), sanitizeForFirestore(newAdmin)).catch((err) => {
+          console.error('Failed to save super_admin to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc super_admin:', e);
+      }
     }
 
     return newAdmin;
@@ -305,9 +329,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      deleteDoc(doc(db, 'super_admins', cleanId)).catch((err) => {
-        console.error('Failed to delete super_admin from Firebase:', err);
-      });
+      try {
+        deleteDoc(doc(db, 'super_admins', cleanId)).catch((err) => {
+          console.error('Failed to delete super_admin from Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in deleteDoc super_admin:', e);
+      }
     }
 
     return true;
@@ -331,9 +359,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'users', user.uid), user, { merge: true }).catch((err) => {
-        console.error('Failed to save user to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'users', user.uid), sanitizeForFirestore(user), { merge: true }).catch((err) => {
+          console.error('Failed to save user to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc user:', e);
+      }
     }
 
     return user;
@@ -341,11 +373,11 @@ class MockDataService {
 
   // ── Organizations ───────────────────────────────────────────────────────
   public getOrganizations(): Organization[] {
-    return this.state.organizations;
+    return this.state.organizations || [];
   }
 
   public getOrganization(id: string): Organization | undefined {
-    return this.state.organizations.find((o) => o.id === id);
+    return (this.state.organizations || []).find((o) => o.id === id);
   }
 
   public addOrganization(org: Omit<Organization, 'id' | 'createdAt' | 'status' | 'paymentMethods'>): Organization {
@@ -368,9 +400,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'organizations', newOrg.id), newOrg).catch((err) => {
-        console.error('Failed to save organization to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'organizations', newOrg.id), sanitizeForFirestore(newOrg)).catch((err) => {
+          console.error('Failed to save organization to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc organization:', e);
+      }
     }
 
     return newOrg;
@@ -381,7 +417,7 @@ class MockDataService {
     status: 'approved' | 'rejected' | 'suspended',
     reason?: string
   ): Organization | undefined {
-    const org = this.state.organizations.find((o) => o.id === orgId);
+    const org = (this.state.organizations || []).find((o) => o.id === orgId);
     if (org) {
       org.status = status;
       if (reason) org.rejectionReason = reason;
@@ -393,13 +429,18 @@ class MockDataService {
       this.notify();
 
       if (isFirebaseConfigured) {
-        updateDoc(doc(db, 'organizations', orgId), {
-          status,
-          ...(reason ? { rejectionReason: reason } : {}),
-          ...(status === 'approved' ? { approvedAt: org.approvedAt, approvedBy: org.approvedBy } : {})
-        }).catch((err) => {
-          console.error('Failed to update organization status in Firebase:', err);
-        });
+        try {
+          const payload = sanitizeForFirestore({
+            status,
+            ...(reason ? { rejectionReason: reason } : {}),
+            ...(status === 'approved' ? { approvedAt: org.approvedAt, approvedBy: org.approvedBy } : {})
+          });
+          updateDoc(doc(db, 'organizations', orgId), payload).catch((err) => {
+            console.error('Failed to update organization status in Firebase:', err);
+          });
+        } catch (e) {
+          console.error('Error in updateDoc organization:', e);
+        }
       }
     }
     return org;
@@ -407,14 +448,15 @@ class MockDataService {
 
   // ── Events ──────────────────────────────────────────────────────────────
   public getEvents(orgId?: string): EventItem[] {
+    const events = this.state.events || [];
     if (orgId) {
-      return this.state.events.filter((e) => e.organizationId === orgId);
+      return events.filter((e) => e.organizationId === orgId);
     }
-    return this.state.events;
+    return events;
   }
 
   public getEvent(eventId: string): EventItem | undefined {
-    return this.state.events.find((e) => e.id === eventId);
+    return (this.state.events || []).find((e) => e.id === eventId);
   }
 
   public addEvent(event: Omit<EventItem, 'id' | 'createdAt' | 'ticketsSold' | 'revenue'>): EventItem {
@@ -430,9 +472,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'events', newEvent.id), newEvent).catch((err) => {
-        console.error('Failed to save event to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'events', newEvent.id), sanitizeForFirestore(newEvent)).catch((err) => {
+          console.error('Failed to save event to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc event:', e);
+      }
     }
 
     return newEvent;
@@ -440,7 +486,7 @@ class MockDataService {
 
   // ── Ticket Types ────────────────────────────────────────────────────────
   public getTicketTypes(eventId: string): TicketType[] {
-    return this.state.ticketTypes.filter((t) => t.eventId === eventId);
+    return (this.state.ticketTypes || []).filter((t) => t.eventId === eventId);
   }
 
   public addTicketType(type: Omit<TicketType, 'id'>): TicketType {
@@ -453,9 +499,13 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'ticketTypes', newType.id), newType).catch((err) => {
-        console.error('Failed to save ticketType to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'ticketTypes', newType.id), sanitizeForFirestore(newType)).catch((err) => {
+          console.error('Failed to save ticketType to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc ticketType:', e);
+      }
     }
 
     return newType;
@@ -473,7 +523,7 @@ class MockDataService {
     screenshotUrl: string
   ): { order: TicketOrder; payment: PaymentSubmission } {
     const event = this.getEvent(eventId);
-    const ticketType = this.state.ticketTypes.find((t) => t.id === ticketTypeId);
+    const ticketType = (this.state.ticketTypes || []).find((t) => t.id === ticketTypeId);
 
     if (!event || !ticketType) {
       throw new Error('Event or Ticket Type not found');
@@ -523,12 +573,16 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
-        console.error('Failed to save order to Firebase:', err);
-      });
-      setDoc(doc(db, 'payments', newPayment.id), newPayment).catch((err) => {
-        console.error('Failed to save payment to Firebase:', err);
-      });
+      try {
+        setDoc(doc(db, 'orders', newOrder.id), sanitizeForFirestore(newOrder)).catch((err) => {
+          console.error('Failed to save order to Firebase:', err);
+        });
+        setDoc(doc(db, 'payments', newPayment.id), sanitizeForFirestore(newPayment)).catch((err) => {
+          console.error('Failed to save payment to Firebase:', err);
+        });
+      } catch (e) {
+        console.error('Error in setDoc order/payment:', e);
+      }
     }
 
     return { order: newOrder, payment: newPayment };
@@ -536,14 +590,14 @@ class MockDataService {
 
   // ── Payment Approvals & Automatic Ticket Generation ─────────────────────
   public approvePayment(paymentId: string, reviewerName = 'Organizer Admin'): { payment: PaymentSubmission; tickets: DigitalTicket[] } {
-    const payment = this.state.payments.find((p) => p.id === paymentId);
+    const payment = (this.state.payments || []).find((p) => p.id === paymentId);
     if (!payment) throw new Error('Payment not found');
 
-    const order = this.state.orders.find((o) => o.id === payment.orderId);
+    const order = (this.state.orders || []).find((o) => o.id === payment.orderId);
     if (!order) throw new Error('Order not found');
 
     const event = this.getEvent(order.eventId);
-    const ticketType = this.state.ticketTypes.find((t) => t.id === order.ticketTypeId);
+    const ticketType = (this.state.ticketTypes || []).find((t) => t.id === order.ticketTypeId);
 
     const nowIso = new Date().toISOString();
     payment.status = 'approved';
@@ -589,9 +643,13 @@ class MockDataService {
       generatedTickets.push(newTicket);
 
       if (isFirebaseConfigured) {
-        setDoc(doc(db, 'tickets', newTicket.id), newTicket).catch((err) => {
-          console.error('Failed to save ticket to Firebase:', err);
-        });
+        try {
+          setDoc(doc(db, 'tickets', newTicket.id), sanitizeForFirestore(newTicket)).catch((err) => {
+            console.error('Failed to save ticket to Firebase:', err);
+          });
+        } catch (e) {
+          console.error('Error in setDoc ticket:', e);
+        }
       }
     }
 
@@ -599,19 +657,27 @@ class MockDataService {
       event.ticketsSold += order.quantity;
       event.revenue += order.totalPrice;
       if (isFirebaseConfigured) {
-        updateDoc(doc(db, 'events', event.id), {
-          ticketsSold: event.ticketsSold,
-          revenue: event.revenue
-        }).catch(console.error);
+        try {
+          updateDoc(doc(db, 'events', event.id), sanitizeForFirestore({
+            ticketsSold: event.ticketsSold,
+            revenue: event.revenue
+          })).catch(console.error);
+        } catch (e) {
+          console.error('Error in updateDoc event:', e);
+        }
       }
     }
 
     if (ticketType) {
       ticketType.remainingQuantity = Math.max(0, ticketType.remainingQuantity - order.quantity);
       if (isFirebaseConfigured) {
-        updateDoc(doc(db, 'ticketTypes', ticketType.id), {
-          remainingQuantity: ticketType.remainingQuantity
-        }).catch(console.error);
+        try {
+          updateDoc(doc(db, 'ticketTypes', ticketType.id), sanitizeForFirestore({
+            remainingQuantity: ticketType.remainingQuantity
+          })).catch(console.error);
+        } catch (e) {
+          console.error('Error in updateDoc ticketType:', e);
+        }
       }
     }
 
@@ -619,24 +685,28 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      updateDoc(doc(db, 'payments', payment.id), {
-        status: 'approved',
-        reviewedAt: nowIso,
-        reviewedBy: reviewerName
-      }).catch(console.error);
-      updateDoc(doc(db, 'orders', order.id), {
-        status: 'approved'
-      }).catch(console.error);
+      try {
+        updateDoc(doc(db, 'payments', payment.id), sanitizeForFirestore({
+          status: 'approved',
+          reviewedAt: nowIso,
+          reviewedBy: reviewerName
+        })).catch(console.error);
+        updateDoc(doc(db, 'orders', order.id), sanitizeForFirestore({
+          status: 'approved'
+        })).catch(console.error);
+      } catch (e) {
+        console.error('Error in updateDoc payment/order:', e);
+      }
     }
 
     return { payment, tickets: generatedTickets };
   }
 
   public rejectPayment(paymentId: string, reason: string, reviewerName = 'Organizer Admin'): PaymentSubmission {
-    const payment = this.state.payments.find((p) => p.id === paymentId);
+    const payment = (this.state.payments || []).find((p) => p.id === paymentId);
     if (!payment) throw new Error('Payment not found');
 
-    const order = this.state.orders.find((o) => o.id === payment.orderId);
+    const order = (this.state.orders || []).find((o) => o.id === payment.orderId);
 
     const nowIso = new Date().toISOString();
     payment.status = 'rejected';
@@ -652,16 +722,20 @@ class MockDataService {
     this.notify();
 
     if (isFirebaseConfigured) {
-      updateDoc(doc(db, 'payments', payment.id), {
-        status: 'rejected',
-        rejectionReason: reason,
-        reviewedAt: nowIso,
-        reviewedBy: reviewerName
-      }).catch(console.error);
-      if (order) {
-        updateDoc(doc(db, 'orders', order.id), {
-          status: 'rejected'
-        }).catch(console.error);
+      try {
+        updateDoc(doc(db, 'payments', payment.id), sanitizeForFirestore({
+          status: 'rejected',
+          rejectionReason: reason,
+          reviewedAt: nowIso,
+          reviewedBy: reviewerName
+        })).catch(console.error);
+        if (order) {
+          updateDoc(doc(db, 'orders', order.id), sanitizeForFirestore({
+            status: 'rejected'
+          })).catch(console.error);
+        }
+      } catch (e) {
+        console.error('Error in updateDoc reject payment:', e);
       }
     }
 
@@ -670,25 +744,31 @@ class MockDataService {
 
   // ── Customer Tickets Wallet ─────────────────────────────────────────────
   public getCustomerTickets(phoneOrEmailOrTgId?: string): DigitalTicket[] {
-    if (!phoneOrEmailOrTgId) return this.state.tickets;
+    const tickets = this.state.tickets || [];
+    if (!phoneOrEmailOrTgId) return tickets;
     const clean = phoneOrEmailOrTgId.trim().toLowerCase();
-    return this.state.tickets.filter(
+    return tickets.filter(
       (t) =>
-        t.customerPhone.toLowerCase().includes(clean) ||
+        (t.customerPhone || '').toLowerCase().includes(clean) ||
         (t.customerEmail && t.customerEmail.toLowerCase().includes(clean)) ||
-        t.customerId.toLowerCase().includes(clean)
+        (t.customerId || '').toLowerCase().includes(clean)
     );
   }
 
   // ── Platform Level Stats for Super Admin ────────────────────────────────
   public getPlatformStats(): PlatformStats {
-    const totalOrganizations = this.state.organizations.length;
-    const pendingOrganizations = this.state.organizations.filter((o) => o.status === 'pending').length;
-    const activeEvents = this.state.events.filter((e) => e.status === 'published').length;
-    const totalTicketsIssued = this.state.tickets.length;
-    const totalTicketsCheckedIn = this.state.tickets.filter((t) => t.status === 'used').length;
-    const totalRevenue = this.state.events.reduce((sum, e) => sum + e.revenue, 0);
-    const pendingPaymentsCount = this.state.payments.filter((p) => p.status === 'pending').length;
+    const organizations = this.state.organizations || [];
+    const events = this.state.events || [];
+    const tickets = this.state.tickets || [];
+    const payments = this.state.payments || [];
+
+    const totalOrganizations = organizations.length;
+    const pendingOrganizations = organizations.filter((o) => o.status === 'pending').length;
+    const activeEvents = events.filter((e) => e.status === 'published').length;
+    const totalTicketsIssued = tickets.length;
+    const totalTicketsCheckedIn = tickets.filter((t) => t.status === 'used').length;
+    const totalRevenue = events.reduce((sum, e) => sum + (e.revenue || 0), 0);
+    const pendingPaymentsCount = payments.filter((p) => p.status === 'pending').length;
 
     return {
       totalOrganizations,

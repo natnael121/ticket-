@@ -22,21 +22,30 @@ export function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const knownViews = [
+    'landing', 'organizer_register', 'organizer_login',
+    'organizer_dashboard', 'super_admin_dashboard',
+    'public_event', 'my_tickets', 'scanner'
+  ];
+  const safeView = knownViews.includes(currentView) ? currentView : 'landing';
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--tg-bg2)', color: 'var(--tg-text)' }}>
       <main>
-        {currentView === 'landing' && <LandingView onNavigate={handleNavigate} />}
-        {currentView === 'organizer_register' && <OrganizerRegistrationView onNavigate={handleNavigate} />}
-        {currentView === 'organizer_login' && <OrganizerDashboardView onNavigate={handleNavigate} />}
-        {currentView === 'organizer_dashboard' && <OrganizerDashboardView onNavigate={handleNavigate} />}
-        {currentView === 'super_admin_dashboard' && (
-          isSuperAdmin ? <SuperAdminDashboardView onNavigate={handleNavigate} /> : <LandingView onNavigate={handleNavigate} />
+        {(safeView === 'landing') && <LandingView onNavigate={handleNavigate} />}
+        {safeView === 'organizer_register' && <OrganizerRegistrationView onNavigate={handleNavigate} />}
+        {safeView === 'organizer_login' && <OrganizerDashboardView onNavigate={handleNavigate} />}
+        {safeView === 'organizer_dashboard' && <OrganizerDashboardView onNavigate={handleNavigate} />}
+        {safeView === 'super_admin_dashboard' && (
+          isSuperAdmin
+            ? <SuperAdminDashboardView onNavigate={handleNavigate} />
+            : <LandingView onNavigate={handleNavigate} />
         )}
-        {currentView === 'public_event' && (
+        {safeView === 'public_event' && (
           <PublicEventView eventId={viewParams.eventId || ''} onNavigate={handleNavigate} />
         )}
-        {currentView === 'my_tickets' && <MyTicketsView onNavigate={handleNavigate} />}
-        {currentView === 'scanner' && <ScannerView onNavigate={handleNavigate} />}
+        {safeView === 'my_tickets' && <MyTicketsView onNavigate={handleNavigate} />}
+        {safeView === 'scanner' && <ScannerView onNavigate={handleNavigate} />}
       </main>
     </div>
   );

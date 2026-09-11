@@ -28,17 +28,17 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
   }, []);
 
   const stats = mockDataService.getPlatformStats();
-  const organizations = mockDataService.getOrganizations();
-  const state = mockDataService.getState();
+  const organizations = mockDataService.getOrganizations() || [];
+  const state = mockDataService.getState() || {};
   const primaryAdminId = mockDataService.getPrimarySuperAdminEnv();
-  const superAdmins = mockDataService.getSuperAdmins();
+  const superAdmins = mockDataService.getSuperAdmins() || [];
 
-  const pendingOrgs = organizations.filter((o) => o.status === 'pending');
+  const pendingOrgs = organizations.filter((o) => o && o.status === 'pending');
   const filteredOrgs = organizations.filter(
     (o) =>
-      o.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase())
+      (o?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o?.ownerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o?.ownerEmail || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleApprove = (orgId: string, orgName: string) => {

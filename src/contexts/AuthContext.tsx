@@ -1,3 +1,4 @@
+// @refresh reset
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { getTelegramUser } from '../services/telegramService';
@@ -44,9 +45,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Calculate whether currently authenticated user has Super Admin authority
-  const isSuperAdmin = Boolean(
-    user && mockDataService.isSuperAdmin(user.telegramUserId, user.telegramUsername)
-  );
+  const isSuperAdmin = (() => {
+    try {
+      return Boolean(
+        user && mockDataService.isSuperAdmin(user.telegramUserId, user.telegramUsername)
+      );
+    } catch {
+      return false;
+    }
+  })();
 
   // Subscribe to real-time updates from Firestore / mockDataService
   useEffect(() => {

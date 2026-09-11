@@ -188,7 +188,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
               className="tg-cell"
               onClick={() => {
                 triggerHaptic('impact');
-                switchUserRole('super_admin');
                 onNavigate('super_admin_dashboard');
               }}
             >
