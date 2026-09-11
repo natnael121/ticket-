@@ -105,7 +105,7 @@ export async function processTicketCheckIn(
         message: 'VALID TICKET ✅',
         ticket: {
           ...ticketData,
-          status: 'used',
+          status: 'used' as const,
           checkedInAt: nowIso,
           checkedInBy: staffUserId,
           checkedInByName: staffName

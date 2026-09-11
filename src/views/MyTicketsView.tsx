@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { mockDataService } from '../services/mockDataService';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Ticket, Calendar, MapPin, CheckCircle2, Clock, XCircle, ChevronLeft } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronLeft } from 'lucide-react';
 
-interface MyTicketsViewProps {
+interface Props {
   onNavigate: (view: string, params?: Record<string, string>) => void;
 }
 
-export const MyTicketsView: React.FC<MyTicketsViewProps> = ({ onNavigate }) => {
+export const MyTicketsView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'valid' | 'used'>('all');
 
@@ -20,139 +20,109 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({ onNavigate }) => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 pb-20">
-      <div className="max-w-xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2">
-            <button onClick={() => onNavigate('landing')} className="text-slate-400 hover:text-white mr-1">
-              <ChevronLeft className="w-5 h-5" />
+    <div className="tg-page">
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="tg-header">
+        <button className="tg-header__back" onClick={() => onNavigate('landing')}>
+          <ChevronLeft style={{ width: 20, height: 20 }} />
+        </button>
+        <span className="tg-header__title">My Tickets</span>
+        <span className="tg-pill tg-pill--amber">{customerTickets.length} Passes</span>
+      </div>
+
+      <div className="tg-content">
+        {/* ── Filter Tabs ──────────────────────────────────────────── */}
+        <div className="tg-tabs" style={{ padding: '0 0 12px' }}>
+          {(['all', 'valid', 'used'] as const).map((f) => (
+            <button key={f} className={`tg-tab ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
+              {f === 'all' ? `All (${customerTickets.length})` : f === 'valid' ? 'Valid' : 'Used'}
             </button>
-            <Ticket className="w-6 h-6 text-amber-400" />
-            <h1 className="text-2xl font-extrabold text-white">My Digital Tickets</h1>
-          </div>
-          <span className="text-xs text-slate-400 font-semibold bg-slate-900 border border-slate-800 px-3 py-1 rounded-full">
-            {customerTickets.length} Passes
-          </span>
+          ))}
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition ${
-              filter === 'all' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            All Tickets
-          </button>
-          <button
-            onClick={() => setFilter('valid')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition ${
-              filter === 'valid' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            Valid Passes
-          </button>
-          <button
-            onClick={() => setFilter('used')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition ${
-              filter === 'used' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            Used Passes
-          </button>
-        </div>
-
-        {/* Tickets Stack */}
+        {/* ── Ticket List ──────────────────────────────────────────── */}
         {filteredTickets.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3">
-            <Ticket className="w-12 h-12 text-slate-600 mx-auto" />
-            <h3 className="text-base font-bold text-white">No Tickets Found</h3>
-            <p className="text-xs text-slate-400">You have no active or historical tickets in your wallet yet.</p>
-            <button
-              onClick={() => onNavigate('landing')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl"
-            >
+          <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '48px 20px', textAlign: 'center' }}>
+            <div style={{ width: 60, height: 60, borderRadius: 'var(--tg-radius)', background: 'rgba(245,166,35,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Ticket style={{ width: 30, height: 30, color: 'var(--tg-amber)' }} />
+            </div>
+            <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--tg-text)' }}>No Tickets Found</div>
+            <p style={{ fontSize: 13, color: 'var(--tg-hint)', lineHeight: 1.6, marginTop: 8, marginBottom: 20 }}>
+              Browse events and buy tickets to see them here.
+            </p>
+            <button className="tg-btn tg-btn--primary" style={{ maxWidth: 180, margin: '0 auto' }} onClick={() => onNavigate('landing')}>
               Browse Events
             </button>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {filteredTickets.map((t) => (
               <div
                 key={t.id}
-                className={`relative bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border rounded-3xl overflow-hidden shadow-2xl transition ${
-                  t.status === 'used' ? 'border-slate-800 opacity-75' : 'border-amber-500/40'
-                }`}
+                style={{
+                  background: 'var(--tg-bg)',
+                  borderRadius: 'var(--tg-radius-lg)',
+                  overflow: 'hidden',
+                  border: t.status === 'valid' ? '1.5px solid rgba(77,205,94,0.3)' : '1.5px solid var(--tg-divider)',
+                  opacity: t.status === 'used' ? 0.7 : 1
+                }}
               >
-                {/* Top Ticket Stub */}
-                <div className="p-6 border-b-2 border-dashed border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
-                      {t.organizationName || 'ABC Events'}
-                    </span>
-
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase flex items-center gap-1 ${
-                        t.status === 'used'
-                          ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      }`}
-                    >
-                      {t.status === 'used' ? 'USED ✅' : 'VALID TICKET 🎟️'}
-                    </span>
+                {/* Ticket Top: Event Info */}
+                <div style={{ padding: '16px', borderBottom: '2px dashed var(--tg-divider)' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <span className={`tg-pill ${t.status === 'valid' ? 'tg-pill--green' : 'tg-pill--purple'}`}>
+                        {t.status === 'valid' ? '✓ Valid Ticket' : '✓ Used'}
+                      </span>
+                    </div>
+                    {t.organizationName && (
+                      <span className="tg-pill tg-pill--blue">{t.organizationName}</span>
+                    )}
                   </div>
-
-                  <div>
-                    <h2 className="text-xl font-extrabold text-white leading-snug">{t.eventName}</h2>
-                    <p className="text-xs font-semibold text-blue-400 mt-0.5">{t.ticketTypeName}</p>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--tg-text)', lineHeight: 1.3, marginBottom: 4 }}>
+                    {t.eventName}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs pt-2">
-                    <div className="flex items-start gap-2">
-                      <Calendar className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                  <div style={{ fontSize: 13, color: 'var(--tg-accent)', fontWeight: 500 }}>{t.ticketTypeName}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <Calendar style={{ width: 14, height: 14, color: 'var(--tg-hint)', flexShrink: 0 }} />
                       <div>
-                        <span className="text-slate-400 block text-[10px]">Date & Time</span>
-                        <strong className="text-slate-200">{t.eventDate} at {t.eventTime}</strong>
+                        <div style={{ fontSize: 10, color: 'var(--tg-hint)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Date & Time</div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tg-text)' }}>{t.eventDate}</div>
                       </div>
                     </div>
-
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <MapPin style={{ width: 14, height: 14, color: 'var(--tg-hint)', flexShrink: 0 }} />
                       <div>
-                        <span className="text-slate-400 block text-[10px]">Venue</span>
-                        <strong className="text-slate-200">{t.venue}</strong>
+                        <div style={{ fontSize: 10, color: 'var(--tg-hint)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Venue</div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tg-text)' }}>{t.venue}</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Ticket Stub (QR Code & Identifier) */}
-                <div className="p-6 bg-slate-950 flex flex-col items-center justify-center space-y-4 text-center">
-                  <div className="p-4 bg-white rounded-2xl shadow-inner border border-slate-200 inline-block">
-                    <QRCodeSVG value={t.qrData || t.id} size={160} level="H" />
+                {/* Ticket Bottom: QR Code */}
+                <div style={{ background: 'var(--tg-bg2)', padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  <div style={{ padding: 12, background: '#fff', borderRadius: 12 }}>
+                    <QRCodeSVG value={t.qrData || t.id} size={148} level="H" />
                   </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block">
-                      Ticket ID / Scanner Identifier
-                    </span>
-                    <strong className="text-sm font-mono font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--tg-hint)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Ticket ID</div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--tg-amber)', background: 'rgba(245,166,35,0.08)', padding: '4px 12px', borderRadius: 6 }}>
                       {t.id}
-                    </strong>
+                    </div>
                   </div>
-
-                  <div className="text-[11px] text-slate-400 flex items-center gap-3 pt-1 border-t border-slate-900 w-full justify-center">
-                    <span>Customer: <strong className="text-white">{t.customerName}</strong></span>
-                    <span>•</span>
-                    <span>Price: <strong className="text-emerald-400">{t.price} ETB</strong></span>
+                  <div style={{ display: 'flex', gap: 20, fontSize: 12, color: 'var(--tg-hint)' }}>
+                    <span>Holder: <strong style={{ color: 'var(--tg-text)' }}>{t.customerName}</strong></span>
+                    <span>Price: <strong style={{ color: 'var(--tg-green)' }}>{t.price} ETB</strong></span>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        <div className="spacer-16" />
       </div>
     </div>
   );

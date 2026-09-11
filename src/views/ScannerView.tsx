@@ -5,84 +5,53 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
 import { mockDataService } from '../services/mockDataService';
 import { processTicketCheckIn, CheckInResult } from '../services/ticketService';
-import {
-  QrCode,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  ChevronLeft,
-  Camera,
-  RefreshCw,
-  Search
-} from 'lucide-react';
+import { QrCode, CheckCircle2, XCircle, AlertTriangle, ChevronLeft, Camera, Search } from 'lucide-react';
 
-interface ScannerViewProps {
-  onNavigate: (view: string) => void;
-}
+interface Props { onNavigate: (view: string) => void; }
 
-export const ScannerView: React.FC<ScannerViewProps> = ({ onNavigate }) => {
+export const ScannerView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const { triggerHaptic, showAlert } = useTelegram();
-
-  const [selectedEventId, setSelectedEventId] = useState<string>('evt_001');
+  const { triggerHaptic } = useTelegram();
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [manualTicketInput, setManualTicketInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scanResult, setScanResult] = useState<CheckInResult | null>(null);
-
-  const events = mockDataService.getEvents();
-  const activeEvent = events.find((e) => e.id === selectedEventId) || events[0];
-
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
+  const events = mockDataService.getEvents();
+
   useEffect(() => {
-    // Initialize html5-qrcode camera scanner
+    if (events.length > 0 && !selectedEventId) setSelectedEventId(events[0].id);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
     const scanner = new Html5QrcodeScanner(
       'qr-reader-container',
-      {
-        fps: 10,
-        qrbox: { width: 240, height: 240 },
-        aspectRatio: 1.0
-      },
-      /* verbose= */ false
+      { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
+      false
     );
-
     scanner.render(
-      async (scannedText) => {
-        if (isProcessing) return;
-        handleValidateTicket(scannedText);
-      },
-      (error) => {
-        // quiet scan frame error
-      }
+      async (scannedText) => { if (!isProcessing) handleValidateTicket(scannedText); },
+      () => {}
     );
-
     scannerRef.current = scanner;
-
-    return () => {
-      scanner.clear().catch((err) => console.warn('Scanner clear error:', err));
-    };
+    return () => { scanner.clear().catch(() => {}); };
   }, [selectedEventId]);
 
   const handleValidateTicket = async (ticketIdOrData: string) => {
     setIsProcessing(true);
     triggerHaptic('impact');
-
     const result = await processTicketCheckIn(
-      ticketIdOrData,
-      selectedEventId,
-      user?.uid || 'staff_001',
-      user?.fullName || 'Gate Staff',
+      ticketIdOrData, selectedEventId,
+      user?.uid || 'staff_001', user?.fullName || 'Gate Staff',
       mockDataService.getState().tickets
     );
-
     setIsProcessing(false);
     setScanResult(result);
-
     if (result.success) {
       triggerHaptic('success');
-      try {
-        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-      } catch (e) {}
+      try { confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } }); } catch {}
     } else {
       triggerHaptic('error');
     }
@@ -96,178 +65,144 @@ export const ScannerView: React.FC<ScannerViewProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 pb-20">
-      <div className="max-w-xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2">
-            <button onClick={() => onNavigate('landing')} className="text-slate-400 hover:text-white mr-1">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <QrCode className="w-6 h-6 text-purple-400" />
-            <h1 className="text-xl font-extrabold text-white">QR Ticket Scanner</h1>
-          </div>
+    <div className="tg-page">
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="tg-header">
+        <button className="tg-header__back" onClick={() => onNavigate('landing')}>
+          <ChevronLeft style={{ width: 20, height: 20 }} />
+        </button>
+        <span className="tg-header__title">Ticket Scanner</span>
+        <span className="tg-pill tg-pill--purple">Gate Mode</span>
+      </div>
 
-          <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full text-xs font-semibold">
-            Entrance Gate Mode
-          </span>
-        </div>
+      <div className="tg-content">
 
-        {/* Event Selector */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <label className="block text-xs font-semibold text-slate-300">Target Scanning Event *</label>
+        {/* ── Event Selector ───────────────────────────────────────── */}
+        <div>
+          <label className="tg-label">Scanning Event</label>
           <select
+            className="tg-input"
+            style={{ appearance: 'none' }}
             value={selectedEventId}
             onChange={(e) => setSelectedEventId(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
           >
+            {events.length === 0 && <option value="">No events available</option>}
             {events.map((evt) => (
-              <option key={evt.id} value={evt.id}>
-                {evt.name} ({evt.date} • {evt.venue})
-              </option>
+              <option key={evt.id} value={evt.id}>{evt.name} · {evt.date}</option>
             ))}
           </select>
         </div>
 
-        {/* Camera View Box */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-2xl overflow-hidden text-center">
-          <div className="flex items-center justify-between px-2 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-              <Camera className="w-4 h-4 animate-pulse" /> Camera Scanner Ready
-            </span>
-            <span>Point camera at Ticket QR Code</span>
-          </div>
+        <div className="spacer-8" />
 
-          <div
-            id="qr-reader-container"
-            className="rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 min-h-[260px]"
-          />
+        {/* ── Camera View ──────────────────────────────────────────── */}
+        <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--tg-divider)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Camera style={{ width: 18, height: 18, color: 'var(--tg-green)' }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tg-text)' }}>Camera Scanner</span>
+            <span style={{ fontSize: 12, color: 'var(--tg-hint)', marginLeft: 'auto' }}>Point at QR code</span>
+          </div>
+          <div id="qr-reader-container" style={{ background: 'var(--tg-bg2)', minHeight: 260 }} />
         </div>
 
-        {/* Manual Code Entry & Quick Test Bar */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-          <form onSubmit={handleManualSubmit} className="flex gap-2">
+        <div className="spacer-8" />
+
+        {/* ── Manual Entry ─────────────────────────────────────────── */}
+        <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '14px 16px' }}>
+          <div style={{ fontSize: 12, color: 'var(--tg-hint)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Or Enter Ticket ID Manually</div>
+          <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: 8 }}>
             <input
+              className="tg-input"
+              style={{ flex: 1, fontFamily: 'monospace', fontSize: 13 }}
               type="text"
-              placeholder="Or type Ticket ID (e.g. EVT-2026-8F72K91)..."
+              placeholder="e.g. EVT-2026-XXXXX"
               value={manualTicketInput}
               onChange={(e) => setManualTicketInput(e.target.value)}
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1 shadow"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--tg-purple)', color: '#fff', border: 'none', borderRadius: 'var(--tg-radius)', padding: '0 16px', fontWeight: 600, fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
             >
-              <Search className="w-3.5 h-3.5" /> Check Ticket
+              <Search style={{ width: 16, height: 16 }} />
             </button>
           </form>
-
-          {/* Quick Demo Test Buttons */}
-          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Quick Test Ticket IDs:</span>
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => handleValidateTicket('EVT-2026-8F72K91')}
-                className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono px-2 py-0.5 rounded border border-slate-700"
-              >
-                Scan Ticket #1
-              </button>
-              <button
-                onClick={() => handleValidateTicket('EVT-2026-3N89P44')}
-                className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono px-2 py-0.5 rounded border border-slate-700"
-              >
-                Scan Ticket #2
-              </button>
-            </div>
-          </div>
         </div>
+
+        <div className="spacer-16" />
       </div>
 
-      {/* SCAN RESULT MODAL */}
+      {/* ── Scan Result Sheet ────────────────────────────────────────── */}
       {scanResult && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="tg-overlay tg-overlay--center" onClick={() => setScanResult(null)}>
           <div
-            className={`max-w-md w-full rounded-3xl p-6 text-center space-y-5 shadow-2xl border-2 ${
-              scanResult.success
-                ? 'bg-slate-900 border-emerald-500 shadow-emerald-500/20'
+            className="tg-sheet--center"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: 'var(--tg-radius-xl)',
+              background: 'var(--tg-bg)',
+              textAlign: 'center',
+              maxWidth: 340,
+              border: scanResult.success
+                ? '2px solid rgba(77,205,94,0.4)'
                 : scanResult.resultCode === 'already_used'
-                ? 'bg-slate-900 border-red-500 shadow-red-500/20'
-                : 'bg-slate-900 border-amber-500 shadow-amber-500/20'
-            }`}
+                ? '2px solid rgba(229,57,53,0.4)'
+                : '2px solid rgba(245,166,35,0.4)'
+            }}
           >
-            {/* Icon Header */}
-            {scanResult.success ? (
-              <div className="w-20 h-20 bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                <CheckCircle2 className="w-12 h-12" />
-              </div>
-            ) : scanResult.resultCode === 'already_used' ? (
-              <div className="w-20 h-20 bg-red-500/20 border-2 border-red-500 text-red-500 rounded-full flex items-center justify-center mx-auto animate-pulse">
-                <XCircle className="w-12 h-12" />
-              </div>
-            ) : (
-              <div className="w-20 h-20 bg-amber-500/20 border-2 border-amber-500 text-amber-400 rounded-full flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-12 h-12" />
-              </div>
-            )}
-
-            {/* Title */}
-            <div>
-              <h2
-                className={`text-2xl font-extrabold tracking-tight ${
-                  scanResult.success
-                    ? 'text-emerald-400'
-                    : scanResult.resultCode === 'already_used'
-                    ? 'text-red-500'
-                    : 'text-amber-400'
-                }`}
-              >
-                {scanResult.message}
-              </h2>
-
-              <p className="text-xs text-slate-400 mt-1">
-                {scanResult.success
-                  ? 'Ticket verified successfully. Customer is allowed entry.'
-                  : scanResult.resultCode === 'already_used'
-                  ? 'WARNING: This ticket was already checked in!'
-                  : 'Invalid ticket or ticket does not belong to this event.'}
-              </p>
+            {/* Result Icon */}
+            <div style={{
+              width: 80, height: 80,
+              borderRadius: '50%',
+              background: scanResult.success ? 'rgba(77,205,94,0.15)' : scanResult.resultCode === 'already_used' ? 'rgba(229,57,53,0.15)' : 'rgba(245,166,35,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px'
+            }}>
+              {scanResult.success
+                ? <CheckCircle2 style={{ width: 44, height: 44, color: 'var(--tg-green)' }} />
+                : scanResult.resultCode === 'already_used'
+                ? <XCircle style={{ width: 44, height: 44, color: 'var(--tg-red)' }} />
+                : <AlertTriangle style={{ width: 44, height: 44, color: 'var(--tg-amber)' }} />
+              }
             </div>
 
-            {/* Detailed Ticket info Box */}
+            <div style={{
+              fontSize: 22, fontWeight: 800,
+              color: scanResult.success ? 'var(--tg-green)' : scanResult.resultCode === 'already_used' ? 'var(--tg-red)' : 'var(--tg-amber)',
+              marginBottom: 6
+            }}>
+              {scanResult.message}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginBottom: 20, lineHeight: 1.5 }}>
+              {scanResult.success
+                ? 'Entry approved. Welcome!'
+                : scanResult.resultCode === 'already_used'
+                ? 'This ticket was already scanned!'
+                : 'Ticket not valid for this event.'}
+            </div>
+
+            {/* Ticket Details */}
             {scanResult.ticket && (
-              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-left space-y-2 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">Customer Name:</span>
-                  <strong className="text-white text-sm">{scanResult.ticket.customerName}</strong>
-                </div>
-
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">Ticket Type:</span>
-                  <span className="font-bold text-blue-400">{scanResult.ticket.ticketTypeName}</span>
-                </div>
-
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">Ticket ID:</span>
-                  <span className="font-mono font-bold text-amber-400">{scanResult.ticket.id}</span>
-                </div>
-
-                {scanResult.resultCode === 'already_used' && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl space-y-1 text-red-300">
-                    <p className="font-bold">First Check-in Record:</p>
-                    <p>🕒 Time: {scanResult.checkedInAt || scanResult.ticket.checkedInAt}</p>
-                    <p>👤 Scanned By: {scanResult.checkedInByName || scanResult.ticket.checkedInByName || 'Staff Member'}</p>
+              <div style={{ background: 'var(--tg-surface)', borderRadius: 'var(--tg-radius)', padding: '12px 14px', textAlign: 'left', marginBottom: 16 }}>
+                {[
+                  { label: 'Customer', value: scanResult.ticket.customerName },
+                  { label: 'Ticket Type', value: scanResult.ticket.ticketTypeName },
+                  { label: 'Ticket ID', value: scanResult.ticket.id, mono: true },
+                  ...(scanResult.resultCode === 'already_used' ? [
+                    { label: 'First Scanned', value: String(scanResult.checkedInAt || scanResult.ticket.checkedInAt || '—') },
+                    { label: 'Scanned By', value: scanResult.checkedInByName || scanResult.ticket.checkedInByName || 'Staff' }
+                  ] : [])
+                ].map(({ label, value, mono }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--tg-hint)' }}>{label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tg-text)', fontFamily: mono ? 'monospace' : undefined }}>{value}</span>
                   </div>
-                )}
+                ))}
               </div>
             )}
 
             <button
+              className={`tg-btn ${scanResult.success ? 'tg-btn--success' : 'tg-btn--secondary'}`}
               onClick={() => setScanResult(null)}
-              className={`w-full py-3.5 font-extrabold text-xs rounded-xl shadow-lg transition ${
-                scanResult.success
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                  : 'bg-slate-800 hover:bg-slate-700 text-white'
-              }`}
             >
               Scan Next Ticket
             </button>

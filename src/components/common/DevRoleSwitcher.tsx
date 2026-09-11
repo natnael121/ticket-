@@ -8,10 +8,10 @@ export const DevRoleSwitcher: React.FC<{ currentView: string; onViewChange: (vie
   currentView,
   onViewChange
 }) => {
-  const { role, loginAsDemoRole } = useAuth();
+  const { role, switchUserRole } = useAuth();
 
   const handleRoleSwitch = (targetRole: UserRole, defaultView: string) => {
-    loginAsDemoRole(targetRole);
+    switchUserRole(targetRole);
     onViewChange(defaultView);
   };
 

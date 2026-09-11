@@ -21,9 +21,8 @@ export function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
-      {/* Main View Router */}
-      <main className="flex-1">
+    <div style={{ minHeight: '100dvh', background: 'var(--tg-bg2)', color: 'var(--tg-text)' }}>
+      <main>
         {currentView === 'landing' && <LandingView onNavigate={handleNavigate} />}
         {currentView === 'organizer_register' && <OrganizerRegistrationView onNavigate={handleNavigate} />}
         {currentView === 'organizer_login' && <OrganizerDashboardView onNavigate={handleNavigate} />}
