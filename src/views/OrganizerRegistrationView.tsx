@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { Organization } from '../types';
 import {
   User, Building2, Calendar, CheckCircle2,
@@ -22,7 +22,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
   // Check if user already has an org registered
   const [existingOrg, setExistingOrg] = useState<Organization | null>(() => {
     if (!user?.organizationId) return null;
-    return mockDataService.getOrganization(user.organizationId) || null;
+    return firestoreService.getOrganization(user.organizationId) || null;
   });
 
   // Poll for approval status changes
@@ -31,7 +31,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
     const orgId = (existingOrg || submittedOrg)?.id;
     if (!orgId) return;
     const interval = setInterval(() => {
-      const fresh = mockDataService.getOrganization(orgId);
+      const fresh = firestoreService.getOrganization(orgId);
       if (fresh) {
         if (existingOrg) setExistingOrg(fresh);
         else setSubmittedOrg(fresh);
@@ -83,7 +83,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
     setIsSubmitting(true);
     triggerHaptic('success');
 
-    const newOrg = mockDataService.addOrganization({
+    const newOrg = firestoreService.addOrganization({
       name: formData.companyName,
       type: formData.organizationType,
       businessAddress: formData.businessAddress,

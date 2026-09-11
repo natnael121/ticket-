@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { useTelegram } from '../contexts/TelegramContext';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
 import { PaymentSubmission, EventItem, TicketType } from '../types';
 import {
@@ -95,7 +95,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
       organizationName: currentOrganization.name,
       ...eventForm, status: 'published', totalQuantity: 500
     });
-    mockDataService.addTicketType({
+    firestoreService.addTicketType({
       eventId: newEvt.id, organizationId: currentOrganization.id,
       name: 'Regular Admission', description: 'General entry pass',
       price: 500, currency: 'ETB', totalQuantity: 500, remainingQuantity: 500, maxPerCustomer: 10
@@ -108,7 +108,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
     e.preventDefault();
     if (!showTicketTypeModal) return;
     triggerHaptic('success');
-    mockDataService.addTicketType({
+    firestoreService.addTicketType({
       eventId: showTicketTypeModal, organizationId: currentOrganization.id,
       name: ticketTypeForm.name, description: ticketTypeForm.description,
       price: Number(ticketTypeForm.price), currency: 'ETB',
@@ -206,7 +206,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
                 </button>
               </div>
             ) : orgEvents.map((evt) => {
-              const evtTicketTypes = mockDataService.getTicketTypes(evt.id);
+              const evtTicketTypes = firestoreService.getTicketTypes(evt.id);
               return (
                 <div key={evt.id} style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', overflow: 'hidden' }}>
                   {/* Event header */}

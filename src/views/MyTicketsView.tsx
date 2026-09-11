@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Ticket, Calendar, MapPin, ChevronLeft } from 'lucide-react';
@@ -12,7 +12,7 @@ export const MyTicketsView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'valid' | 'used'>('all');
 
-  const customerTickets = mockDataService.getCustomerTickets(user?.phone || user?.email);
+  const customerTickets = firestoreService.getCustomerTickets(user?.phone || user?.email);
   const filteredTickets = customerTickets.filter((t) => {
     if (filter === 'valid') return t.status === 'valid';
     if (filter === 'used') return t.status === 'used';

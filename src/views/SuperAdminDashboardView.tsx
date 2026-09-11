@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { Organization, SuperAdminUser } from '../types';
 import { useTelegram } from '../contexts/TelegramContext';
 import {
@@ -24,14 +24,14 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
   const [, setTick] = useState(0);
   useEffect(() => {
-    return mockDataService.subscribe(() => setTick((t) => t + 1));
+    return firestoreService.subscribe(() => setTick((t) => t + 1));
   }, []);
 
-  const stats = mockDataService.getPlatformStats();
-  const organizations = mockDataService.getOrganizations() || [];
-  const state = mockDataService.getState() || {};
-  const primaryAdminId = mockDataService.getPrimarySuperAdminEnv();
-  const superAdmins = mockDataService.getSuperAdmins() || [];
+  const stats = firestoreService.getPlatformStats();
+  const organizations = firestoreService.getOrganizations() || [];
+  const state = firestoreService.getState();
+  const primaryAdminId = firestoreService.getPrimarySuperAdminEnv();
+  const superAdmins = firestoreService.getSuperAdmins() || [];
 
   const pendingOrgs = organizations.filter((o) => o && o.status === 'pending');
   const filteredOrgs = organizations.filter(
@@ -43,21 +43,21 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
   const handleApprove = (orgId: string, orgName: string) => {
     triggerHaptic('success');
-    mockDataService.updateOrganizationStatus(orgId, 'approved');
+    firestoreService.updateOrganizationStatus(orgId, 'approved');
     showAlert(`"${orgName}" has been APPROVED!`);
   };
 
   const handleConfirmReject = () => {
     if (!rejectionModalOrg || !rejectionReason.trim()) return;
     triggerHaptic('error');
-    mockDataService.updateOrganizationStatus(rejectionModalOrg.id, 'rejected', rejectionReason);
+    firestoreService.updateOrganizationStatus(rejectionModalOrg.id, 'rejected', rejectionReason);
     showAlert(`"${rejectionModalOrg.name}" has been REJECTED.`);
     setRejectionModalOrg(null);
   };
 
   const handleSuspend = (orgId: string, orgName: string) => {
     triggerHaptic('warning');
-    mockDataService.updateOrganizationStatus(orgId, 'suspended');
+    firestoreService.updateOrganizationStatus(orgId, 'suspended');
     showAlert(`"${orgName}" is now SUSPENDED.`);
   };
 
@@ -67,7 +67,7 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
     if (!cleanId) return;
 
     triggerHaptic('success');
-    mockDataService.addSuperAdmin({
+    firestoreService.addSuperAdmin({
       telegramUserId: cleanId,
       name: newAdminName.trim() || undefined,
       username: newAdminUsername.trim() || undefined
@@ -81,7 +81,7 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const handleRemoveSuperAdmin = (tgId: string) => {
     if (confirm(`Remove Super Admin permissions for ID ${tgId}?`)) {
       triggerHaptic('warning');
-      mockDataService.removeSuperAdmin(tgId);
+      firestoreService.removeSuperAdmin(tgId);
       showAlert(`Super Admin ${tgId} removed.`);
     }
   };
@@ -144,7 +144,7 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
             All Orgs ({organizations.length})
           </button>
           <button className={`tg-tab ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>
-            Transactions ({state.payments.length})
+            Transactions ({(state.payments || []).length})
           </button>
           <button className={`tg-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
             Admins ({superAdmins.length + (primaryAdminId ? 1 : 0)})
@@ -258,9 +258,9 @@ export const SuperAdminDashboardView: React.FC<Props> = ({ onNavigate }) => {
         {/* ── Transactions Tab ─────────────────────────────────────────── */}
         {activeTab === 'transactions' && (
           <div className="tg-section">
-            {state.payments.length === 0 ? (
+            {(state.payments || []).length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--tg-hint)', fontSize: 14 }}>No transactions yet</div>
-            ) : state.payments.map((p) => (
+            ) : (state.payments || []).map((p) => (
               <div key={p.id} className="tg-cell" style={{ cursor: 'default' }}>
                 <div style={{ width: 42, height: 42, borderRadius: 'var(--tg-radius-sm)', background: 'rgba(77,205,94,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <DollarSign style={{ width: 20, height: 20, color: 'var(--tg-green)' }} />

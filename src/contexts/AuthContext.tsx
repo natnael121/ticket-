@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { getTelegramUser } from '../services/telegramService';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (tgUser) {
-      const isInitialSA = mockDataService.isSuperAdmin(tgUser.id, tgUser.username);
+      const isInitialSA = firestoreService.isSuperAdmin(tgUser.id, tgUser.username);
       const tgProfile: UserProfile = {
         uid: `tg_${tgUser.id}`,
         email: `${tgUser.username || tgUser.id}@telegram.user`,
@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: isInitialSA ? 'super_admin' : 'customer',
         createdAt: new Date().toISOString()
       };
-      return mockDataService.upsertUserProfile(tgProfile);
+      return firestoreService.upsertUserProfile(tgProfile);
     }
     return null;
   });
@@ -48,19 +48,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isSuperAdmin = (() => {
     try {
       return Boolean(
-        user && mockDataService.isSuperAdmin(user.telegramUserId, user.telegramUsername)
+        user && firestoreService.isSuperAdmin(user.telegramUserId, user.telegramUsername)
       );
     } catch {
       return false;
     }
   })();
 
-  // Subscribe to real-time updates from Firestore / mockDataService
+  // Subscribe to real-time updates from Firestore / firestoreService
   useEffect(() => {
-    const unsubscribe = mockDataService.subscribe(() => {
+    const unsubscribe = firestoreService.subscribe(() => {
       setTick((t) => t + 1);
       if (user) {
-        const freshUser = mockDataService.getUserProfile(user.uid);
+        const freshUser = firestoreService.getUserProfile(user.uid);
         if (freshUser) {
           setUser(freshUser);
         }
@@ -87,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = { ...user, role: newRole };
       setUser(updated);
-      mockDataService.upsertUserProfile(updated);
+      firestoreService.upsertUserProfile(updated);
     }
   };
 
@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const activeTg = customTgUser || tgUser;
     if (!activeTg) return;
 
-    const isAuthorizedSA = mockDataService.isSuperAdmin(activeTg.id, activeTg.username);
+    const isAuthorizedSA = firestoreService.isSuperAdmin(activeTg.id, activeTg.username);
     const assignedRole: UserRole = isAuthorizedSA ? 'super_admin' : activeTg.role || 'customer';
 
     const profile: UserProfile = {
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (profile.organizationId) {
       setOrganizationId(profile.organizationId);
     }
-    mockDataService.upsertUserProfile(profile);
+    firestoreService.upsertUserProfile(profile);
   };
 
   const switchUserRole = (targetRole: UserRole, targetOrgId?: string) => {
@@ -132,9 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizationId: targetOrgId || user.organizationId
       };
       setUser(updated);
-      mockDataService.upsertUserProfile(updated);
+      firestoreService.upsertUserProfile(updated);
     } else {
-      const isGuestSA = mockDataService.isSuperAdmin(undefined, undefined);
+      const isGuestSA = firestoreService.isSuperAdmin(undefined, undefined);
       if (targetRole === 'super_admin' && !isGuestSA) {
         return;
       }
@@ -149,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: new Date().toISOString()
       };
       setUser(guestProfile);
-      mockDataService.upsertUserProfile(guestProfile);
+      firestoreService.upsertUserProfile(guestProfile);
     }
     if (targetOrgId) {
       setOrganizationId(targetOrgId);
@@ -160,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = { ...user, ...profile };
       setUser(updated);
-      mockDataService.upsertUserProfile(updated);
+      firestoreService.upsertUserProfile(updated);
     }
   };
 

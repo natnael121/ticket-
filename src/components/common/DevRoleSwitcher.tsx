@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../types';
-import { mockDataService } from '../../services/mockDataService';
+import { firestoreService } from '../../services/firestoreService';
 import { ShieldCheck, Building2, QrCode, Ticket, RotateCcw } from 'lucide-react';
 
 export const DevRoleSwitcher: React.FC<{ currentView: string; onViewChange: (view: string) => void }> = ({
@@ -16,8 +16,8 @@ export const DevRoleSwitcher: React.FC<{ currentView: string; onViewChange: (vie
   };
 
   const handleResetData = () => {
-    if (confirm('Reset all mock platform data to initial state?')) {
-      mockDataService.resetState();
+    if (confirm('Reset platform data to initial state?')) {
+      firestoreService.resetState();
       window.location.reload();
     }
   };

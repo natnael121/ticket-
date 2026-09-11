@@ -10,6 +10,7 @@ import { PublicEventView } from './views/PublicEventView';
 import { MyTicketsView } from './views/MyTicketsView';
 import { ScannerView } from './views/ScannerView';
 import { useAuth } from './contexts/AuthContext';
+import { FirestoreStatusBanner } from './components/common/FirestoreStatusBanner';
 
 export function AppContent() {
   const { isSuperAdmin } = useAuth();
@@ -31,6 +32,7 @@ export function AppContent() {
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--tg-bg2)', color: 'var(--tg-text)' }}>
+      <FirestoreStatusBanner />
       <main>
         {(safeView === 'landing') && <LandingView onNavigate={handleNavigate} />}
         {safeView === 'organizer_register' && <OrganizerRegistrationView onNavigate={handleNavigate} />}

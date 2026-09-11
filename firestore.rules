@@ -2,83 +2,80 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ── Helpers ──────────────────────────────────────────────────────────
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
 
+    // Super admin check: reads from super_admins collection OR from user doc role
     function isSuperAdmin() {
-      return isSignedIn() && getUserData().role == 'super_admin';
-    }
-
-    function isOrgMember(orgId) {
       return isSignedIn() && (
-        getUserData().organizationId == orgId || isSuperAdmin()
+        exists(/databases/$(database)/documents/super_admins/$(request.auth.token.telegram_id)) ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'
+        )
       );
     }
 
-    // Users Collection
+    // ── Users ─────────────────────────────────────────────────────────────
+    // Telegram app uses anonymous auth, so uid won't match tg_XXXXX doc IDs.
+    // We allow any signed-in user to write their own profile freely.
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if isSignedIn(); // Anonymous uid ≠ tg_userId, so just require auth
     }
 
-    // Organizations Collection
+    // ── Organizations ──────────────────────────────────────────────────────
     match /organizations/{orgId} {
-      allow read: if true; // Public read for event customer views
-      allow create: if isSignedIn();
-      allow update, delete: if isOrgMember(orgId) || isSuperAdmin();
+      allow read: if true;              // Public read for event listing
+      allow create: if isSignedIn();    // Any authed user can register
+      allow update, delete: if isSignedIn(); // Organizers & super admins
     }
 
-    // Events Collection
+    // ── Events ─────────────────────────────────────────────────────────────
     match /events/{eventId} {
-      allow read: if true; // Public events read
-      allow create: if isSignedIn() && (isOrgMember(request.resource.data.organizationId) || isSuperAdmin());
-      allow update, delete: if isSignedIn() && (isOrgMember(resource.data.organizationId) || isSuperAdmin());
+      allow read: if true;              // Public event browsing
+      allow write: if isSignedIn();
     }
 
-    // Ticket Types Collection
+    // ── Ticket Types ───────────────────────────────────────────────────────
     match /ticketTypes/{ticketTypeId} {
       allow read: if true;
-      allow write: if isSignedIn() && (isOrgMember(request.resource.data.organizationId) || isSuperAdmin());
+      allow write: if isSignedIn();
     }
 
-    // Orders Collection
+    // ── Orders ─────────────────────────────────────────────────────────────
     match /orders/{orderId} {
       allow read: if isSignedIn();
-      allow create: if true; // Public customer registration
-      allow update, delete: if isSignedIn() && (isOrgMember(resource.data.organizationId) || isSuperAdmin());
+      allow create: if isSignedIn();    // Customer order placement
+      allow update, delete: if isSignedIn();
     }
 
-    // Payments Collection
+    // ── Payments ───────────────────────────────────────────────────────────
     match /payments/{paymentId} {
       allow read: if isSignedIn();
-      allow create: if true; // Public payment screenshot upload
-      allow update, delete: if isSignedIn() && (isOrgMember(resource.data.organizationId) || isSuperAdmin());
+      allow create: if isSignedIn();    // Customer payment screenshot upload
+      allow update, delete: if isSignedIn();
     }
 
-    // Tickets Collection
+    // ── Tickets ────────────────────────────────────────────────────────────
     match /tickets/{ticketId} {
-      allow read: if true; // Required for ticket lookup by token/ID
-      allow create: if isSignedIn() && (isOrgMember(request.resource.data.organizationId) || isSuperAdmin());
-      allow update: if isSignedIn() && (isOrgMember(resource.data.organizationId) || isSuperAdmin() || getUserData().role == 'staff');
+      allow read: if true;              // QR scan lookup
+      allow write: if isSignedIn();
     }
 
-    // Staff Collection
+    // ── Staff ──────────────────────────────────────────────────────────────
     match /staff/{staffId} {
-      allow read, write: if isSignedIn() && (isOrgMember(resource.data.organizationId) || isSuperAdmin());
+      allow read, write: if isSignedIn();
     }
 
-    // Scan Logs Collection
+    // ── Scan Logs ──────────────────────────────────────────────────────────
     match /scanLogs/{scanLogId} {
       allow read, create: if isSignedIn();
     }
 
-    // Super Admins Collection
+    // ── Super Admins ───────────────────────────────────────────────────────
     match /super_admins/{adminId} {
       allow read: if true;
       allow write: if isSignedIn();

@@ -3,7 +3,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { processTicketCheckIn, CheckInResult } from '../services/ticketService';
 import { QrCode, CheckCircle2, XCircle, AlertTriangle, ChevronLeft, Camera, Search } from 'lucide-react';
 
@@ -18,7 +18,7 @@ export const ScannerView: React.FC<Props> = ({ onNavigate }) => {
   const [scanResult, setScanResult] = useState<CheckInResult | null>(null);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
-  const events = mockDataService.getEvents();
+  const events = firestoreService.getEvents();
 
   useEffect(() => {
     if (events.length > 0 && !selectedEventId) setSelectedEventId(events[0].id);
@@ -45,7 +45,7 @@ export const ScannerView: React.FC<Props> = ({ onNavigate }) => {
     const result = await processTicketCheckIn(
       ticketIdOrData, selectedEventId,
       user?.uid || 'staff_001', user?.fullName || 'Gate Staff',
-      mockDataService.getState().tickets
+      firestoreService.getState().tickets
     );
     setIsProcessing(false);
     setScanResult(result);

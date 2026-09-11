@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import {
   Ticket, Building2, QrCode, ShieldCheck, Calendar,
   ChevronRight, Users, Send, UserCheck, MapPin, Clock
@@ -17,11 +17,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
   const [showLoginSheet, setShowLoginSheet] = useState(false);
   const [manualUsername, setManualUsername] = useState('');
 
-  const publishedEvents = mockDataService.getState().events.filter((e) => e.status === 'published');
+  const publishedEvents = firestoreService.getState().events.filter((e) => e.status === 'published');
 
   // Detect if current user already has an organisation
   const userOrg = user?.organizationId
-    ? mockDataService.getOrganization(user.organizationId) || null
+    ? firestoreService.getOrganization(user.organizationId) || null
     : null;
 
   const handleTelegramAuthSubmit = (e: React.FormEvent) => {

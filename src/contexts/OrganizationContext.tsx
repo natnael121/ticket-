@@ -1,7 +1,7 @@
 // @refresh reset
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Organization, EventItem, TicketOrder, PaymentSubmission, DigitalTicket } from '../types';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { useAuth } from './AuthContext';
 
 interface OrganizationContextType {
@@ -39,13 +39,13 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    const org = mockDataService.getOrganization(organizationId);
+    const org = firestoreService.getOrganization(organizationId);
     setCurrentOrganization(org || null);
 
-    const events = mockDataService.getEvents(organizationId);
+    const events = firestoreService.getEvents(organizationId);
     setOrgEvents(events);
 
-    const state = mockDataService.getState();
+    const state = firestoreService.getState();
     const payments = state.payments.filter((p) => p.organizationId === organizationId);
     setPendingPayments(payments.filter((p) => p.status === 'pending'));
     setApprovedPayments(payments.filter((p) => p.status === 'approved'));
@@ -59,17 +59,17 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [organizationId]);
 
   const approvePayment = (paymentId: string) => {
-    mockDataService.approvePayment(paymentId);
+    firestoreService.approvePayment(paymentId);
     refreshOrgData();
   };
 
   const rejectPayment = (paymentId: string, reason: string) => {
-    mockDataService.rejectPayment(paymentId, reason);
+    firestoreService.rejectPayment(paymentId, reason);
     refreshOrgData();
   };
 
   const createNewEvent = (event: Omit<EventItem, 'id' | 'createdAt' | 'ticketsSold' | 'revenue'>) => {
-    const created = mockDataService.addEvent(event);
+    const created = firestoreService.addEvent(event);
     refreshOrgData();
     return created;
   };

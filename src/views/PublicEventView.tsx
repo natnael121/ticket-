@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockDataService } from '../services/mockDataService';
+import { firestoreService } from '../services/firestoreService';
 import { useTelegram } from '../contexts/TelegramContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
@@ -29,9 +29,9 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
   const { user } = useAuth();
   const { tgUser, triggerHaptic, showAlert } = useTelegram();
 
-  const event = mockDataService.getEvent(eventId) || mockDataService.getEvents()[0];
-  const organization = event ? mockDataService.getOrganization(event.organizationId) : null;
-  const ticketTypes = event ? mockDataService.getTicketTypes(event.id) : [];
+  const event = firestoreService.getEvent(eventId) || firestoreService.getEvents()[0];
+  const organization = event ? firestoreService.getOrganization(event.organizationId) : null;
+  const ticketTypes = event ? firestoreService.getTicketTypes(event.id) : [];
 
   // Checkout State
   const [selectedTicketType, setSelectedTicketType] = useState<TicketType | null>(ticketTypes[0] || null);
@@ -94,7 +94,7 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
     triggerHaptic('success');
     setIsSubmitting(true);
 
-    mockDataService.submitOrderAndPayment(
+    firestoreService.submitOrderAndPayment(
       event.id,
       activeTicket.id,
       customerName,
