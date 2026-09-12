@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { firestoreService } from '../services/firestoreService';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Ticket, Calendar, MapPin, ChevronLeft } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronLeft, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: string, params?: Record<string, string>) => void;
@@ -11,8 +11,16 @@ interface Props {
 export const MyTicketsView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'valid' | 'used'>('all');
+  const [, setTick] = useState(0);
 
-  const customerTickets = firestoreService.getCustomerTickets(user?.phone || user?.email);
+  useEffect(() => {
+    return firestoreService.subscribe(() => setTick((t) => t + 1));
+  }, []);
+
+  const customerTickets = firestoreService.getCustomerTickets(user?.phone || user?.email || user?.fullName);
+  const customerPayments = firestoreService.getCustomerPayments(user?.phone || user?.email || user?.fullName);
+  const pendingPayments = customerPayments.filter((p) => p.status === 'pending');
+
   const filteredTickets = customerTickets.filter((t) => {
     if (filter === 'valid') return t.status === 'valid';
     if (filter === 'used') return t.status === 'used';
@@ -31,6 +39,47 @@ export const MyTicketsView: React.FC<Props> = ({ onNavigate }) => {
       </div>
 
       <div className="tg-content">
+        {/* ── Pending Approval Orders Alert ──────────────────────────── */}
+        {pendingPayments.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tg-amber)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Clock style={{ width: 14, height: 14 }} /> Awaiting Organizer Approval ({pendingPayments.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {pendingPayments.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    background: 'var(--tg-bg)',
+                    border: '1.5px solid rgba(245,166,35,0.4)',
+                    borderRadius: 'var(--tg-radius-lg)',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--tg-text)' }}>{p.eventName}</div>
+                    <div style={{ fontSize: 12, color: 'var(--tg-hint)', marginTop: 2 }}>
+                      Receipt submitted · {p.paymentMethod}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--tg-green)', fontFamily: 'monospace' }}>
+                      {p.amount} ETB
+                    </div>
+                    <span className="tg-pill tg-pill--amber" style={{ fontSize: 10, marginTop: 4 }}>
+                      Pending Approval
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Filter Tabs ──────────────────────────────────────────── */}
         <div className="tg-tabs" style={{ padding: '0 0 12px' }}>
           {(['all', 'valid', 'used'] as const).map((f) => (
@@ -46,9 +95,13 @@ export const MyTicketsView: React.FC<Props> = ({ onNavigate }) => {
             <div style={{ width: 60, height: 60, borderRadius: 'var(--tg-radius)', background: 'rgba(245,166,35,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <Ticket style={{ width: 30, height: 30, color: 'var(--tg-amber)' }} />
             </div>
-            <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--tg-text)' }}>No Tickets Found</div>
+            <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--tg-text)' }}>
+              {pendingPayments.length > 0 ? 'Ticket Pending Approval' : 'No Tickets Found'}
+            </div>
             <p style={{ fontSize: 13, color: 'var(--tg-hint)', lineHeight: 1.6, marginTop: 8, marginBottom: 20 }}>
-              Browse events and buy tickets to see them here.
+              {pendingPayments.length > 0
+                ? 'Your payment was submitted and is awaiting approval by the organizer. Once approved, your QR pass will appear here!'
+                : 'Browse upcoming events and buy tickets to see them here.'}
             </p>
             <button className="tg-btn tg-btn--primary" style={{ maxWidth: 180, margin: '0 auto' }} onClick={() => onNavigate('landing')}>
               Browse Events

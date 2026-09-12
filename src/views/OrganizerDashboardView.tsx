@@ -364,6 +364,49 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </span>
         </div>
 
+        {/* ── Pending Payments Action Alert ─────────────────────────── */}
+        {pendingPayments.length > 0 && (
+          <div
+            onClick={() => {
+              triggerHaptic('impact');
+              setActiveTab('payments');
+            }}
+            style={{
+              background: 'linear-gradient(135deg, rgba(245,166,35,0.2), rgba(245,166,35,0.08))',
+              border: '1.5px solid var(--tg-amber)',
+              borderRadius: 'var(--tg-radius-lg)',
+              padding: '14px 16px',
+              marginBottom: 12,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              boxShadow: '0 4px 14px rgba(245,166,35,0.15)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(245,166,35,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertCircle style={{ width: 22, height: 22, color: 'var(--tg-amber)' }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--tg-text)' }}>
+                  {pendingPayments.length} Ticket Purchase{pendingPayments.length > 1 ? 's' : ''} Need Approval!
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--tg-hint)', marginTop: 2 }}>
+                  Tap here to review receipts & issue digital tickets
+                </div>
+              </div>
+            </div>
+            <button
+              className="tg-btn tg-btn--primary tg-btn--sm"
+              style={{ width: 'auto', padding: '8px 14px', fontSize: 12, fontWeight: 700, flexShrink: 0 }}
+            >
+              Approve Now →
+            </button>
+          </div>
+        )}
+
         {/* ── Stats ───────────────────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
           <div className="tg-stat">

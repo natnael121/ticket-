@@ -56,6 +56,10 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     refreshOrgData();
+    const unsub = firestoreService.subscribe(() => {
+      refreshOrgData();
+    });
+    return () => unsub();
   }, [organizationId]);
 
   const approvePayment = (paymentId: string) => {

@@ -791,6 +791,17 @@ export class FirestoreService {
     );
   }
 
+  public getCustomerPayments(phoneOrEmailOrName?: string): PaymentSubmission[] {
+    const payments = this.state.payments || [];
+    if (!phoneOrEmailOrName) return payments;
+    const clean = phoneOrEmailOrName.trim().toLowerCase();
+    return payments.filter(
+      (p) =>
+        (p.customerPhone || '').toLowerCase().includes(clean) ||
+        (p.customerName || '').toLowerCase().includes(clean)
+    );
+  }
+
   // ── Platform Stats ────────────────────────────────────────────────────────
 
   public getPlatformStats(): PlatformStats {
