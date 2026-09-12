@@ -14,8 +14,45 @@ import { FirestoreStatusBanner } from './components/common/FirestoreStatusBanner
 
 export function AppContent() {
   const { isSuperAdmin } = useAuth();
-  const [currentView, setCurrentView] = useState<string>('landing');
-  const [viewParams, setViewParams] = useState<Record<string, string>>({});
+  const [currentView, setCurrentView] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hash);
+      const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+
+      const eventId =
+        params.get('event') ||
+        params.get('eventId') ||
+        hashParams.get('event') ||
+        hashParams.get('eventId') ||
+        (tgStartParam?.startsWith('event_') ? tgStartParam.replace('event_', '') : tgStartParam?.startsWith('evt_') ? tgStartParam : null);
+
+      if (eventId) return 'public_event';
+      const viewParam = params.get('view') || hashParams.get('view');
+      if (viewParam) return viewParam;
+    } catch {}
+    return 'landing';
+  });
+
+  const [viewParams, setViewParams] = useState<Record<string, string>>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hash);
+      const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+
+      const eventId =
+        params.get('event') ||
+        params.get('eventId') ||
+        hashParams.get('event') ||
+        hashParams.get('eventId') ||
+        (tgStartParam?.startsWith('event_') ? tgStartParam.replace('event_', '') : tgStartParam?.startsWith('evt_') ? tgStartParam : null);
+
+      if (eventId) return { eventId };
+    } catch {}
+    return {};
+  });
 
   const handleNavigate = (view: string, params?: Record<string, string>) => {
     setCurrentView(view);

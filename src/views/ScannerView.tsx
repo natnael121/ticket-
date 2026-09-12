@@ -68,7 +68,7 @@ export const ScannerView: React.FC<Props> = ({ onNavigate }) => {
     <div className="tg-page">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="tg-header">
-        <button className="tg-header__back" onClick={() => onNavigate('landing')}>
+        <button className="tg-header__back" onClick={() => onNavigate('organizer_dashboard')}>
           <ChevronLeft style={{ width: 20, height: 20 }} />
         </button>
         <span className="tg-header__title">Ticket Scanner</span>

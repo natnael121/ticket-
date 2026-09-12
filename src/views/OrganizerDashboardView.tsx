@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOrganization } from '../contexts/OrganizationContext';
 import { useTelegram } from '../contexts/TelegramContext';
+import { useAuth } from '../contexts/AuthContext';
 import { firestoreService } from '../services/firestoreService';
+import { processTicketCheckIn, CheckInResult } from '../services/ticketService';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
 import { PaymentSubmission, EventItem, TicketType } from '../types';
+import { QRCodeSVG } from 'qrcode.react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import confetti from 'canvas-confetti';
 import {
   Building2, Calendar, Ticket, QrCode,
   CheckCircle2, XCircle, PlusCircle, Eye,
   Users, TrendingUp, AlertCircle, ChevronLeft,
-  ExternalLink, Clock, MapPin, DollarSign
+  ExternalLink, Clock, MapPin, DollarSign,
+  Share2, Copy, Check, Send, Search, Camera,
+  AlertTriangle
 } from 'lucide-react';
 
 interface Props {
@@ -21,23 +28,134 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
     allTickets, refreshOrgData, approvePayment,
     rejectPayment, createNewEvent
   } = useOrganization();
+  const { user } = useAuth();
   const { triggerHaptic, showAlert } = useTelegram();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'payments' | 'tickets' | 'analytics'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'payments' | 'scanner' | 'tickets' | 'analytics'>('events');
   const [selectedPayment, setSelectedPayment] = useState<PaymentSubmission | null>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showTicketTypeModal, setShowTicketTypeModal] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  // Share Event / Ticket State
+  const [sharingEvent, setSharingEvent] = useState<EventItem | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Scanner State
+  const [scannerSelectedEventId, setScannerSelectedEventId] = useState<string>('');
+  const [scannerManualInput, setScannerManualInput] = useState<string>('');
+  const [scannerProcessing, setScannerProcessing] = useState(false);
+  const [scannerResult, setScannerResult] = useState<CheckInResult | null>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  // Create Event Form State — with custom initial ticket
   const [eventForm, setEventForm] = useState({
-    name: '', description: '', bannerUrl: '', logoUrl: '',
-    date: '2026-11-15', startTime: '18:00', endTime: '23:00',
-    venue: 'Millennium Hall', address: 'Bole Road, Addis Ababa',
-    googleMapsUrl: '', contactPhone: '+251911234567'
+    name: '',
+    description: '',
+    bannerUrl: '',
+    logoUrl: '',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '18:00',
+    endTime: '22:00',
+    venue: '',
+    address: '',
+    googleMapsUrl: '',
+    contactPhone: '+251911234567',
+    // Custom initial ticket details (NO preset forced 500 ETB price!)
+    ticketName: 'Standard Entry',
+    ticketPrice: '0',
+    ticketQuantity: '100'
   });
+
+  // Add Ticket Type Modal State
   const [ticketTypeForm, setTicketTypeForm] = useState({
-    name: 'VIP Pass', description: 'VIP lounge access', price: 1500, totalQuantity: 100, maxPerCustomer: 5
+    name: 'VIP Pass',
+    description: 'Special access',
+    price: 1000,
+    totalQuantity: 50,
+    maxPerCustomer: 5
   });
+
+  // Auto-select first event for scanner
+  useEffect(() => {
+    if (orgEvents.length > 0 && !scannerSelectedEventId) {
+      setScannerSelectedEventId(orgEvents[0].id);
+    }
+  }, [orgEvents, scannerSelectedEventId]);
+
+  // Handle Camera Scanner Lifecycle on Scanner Tab
+  useEffect(() => {
+    if (activeTab !== 'scanner' || !scannerSelectedEventId) {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+        scannerRef.current = null;
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      try {
+        const scanner = new Html5QrcodeScanner(
+          'org-qr-reader-container',
+          { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
+          false
+        );
+        scanner.render(
+          async (scannedText) => {
+            if (!scannerProcessing) {
+              handleValidateTicket(scannedText);
+            }
+          },
+          () => {}
+        );
+        scannerRef.current = scanner;
+      } catch (err) {
+        console.warn('Scanner init error:', err);
+      }
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, [activeTab, scannerSelectedEventId]);
+
+  const handleValidateTicket = async (ticketIdOrToken: string) => {
+    if (!scannerSelectedEventId) return;
+    setScannerProcessing(true);
+    triggerHaptic('impact');
+
+    const result = await processTicketCheckIn(
+      ticketIdOrToken,
+      scannerSelectedEventId,
+      user?.uid || 'organizer_staff',
+      user?.fullName || currentOrganization?.name || 'Organizer Staff',
+      firestoreService.getState().tickets
+    );
+
+    setScannerProcessing(false);
+    setScannerResult(result);
+
+    if (result.success) {
+      triggerHaptic('success');
+      try {
+        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      } catch {}
+      refreshOrgData();
+    } else {
+      triggerHaptic('error');
+    }
+  };
+
+  const handleManualScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scannerManualInput.trim()) return;
+    handleValidateTicket(scannerManualInput.trim());
+    setScannerManualInput('');
+  };
 
   if (!currentOrganization) {
     return (
@@ -67,8 +185,8 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
   // Metrics
   const totalEvents = orgEvents.length;
   const activeEvents = orgEvents.filter((e) => e.status === 'published').length;
-  const totalTicketsSold = orgEvents.reduce((s, e) => s + e.ticketsSold, 0);
-  const totalRevenue = orgEvents.reduce((s, e) => s + e.revenue, 0);
+  const totalTicketsSold = orgEvents.reduce((s, e) => s + (e.ticketsSold || 0), 0);
+  const totalRevenue = orgEvents.reduce((s, e) => s + (e.revenue || 0), 0);
   const checkedIn = allTickets.filter((t) => t.status === 'used').length;
   const attendanceRate = totalTicketsSold > 0 ? Math.round((checkedIn / totalTicketsSold) * 100) : 0;
 
@@ -78,47 +196,105 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
     showAlert(`Payment approved! Ticket issued to ${p.customerName}.`);
     setSelectedPayment(null);
   };
+
   const handleRejectPayment = (p: PaymentSubmission) => {
-    if (!rejectionReason.trim()) { alert('Please state the rejection reason.'); return; }
+    if (!rejectionReason.trim()) {
+      alert('Please state the rejection reason.');
+      return;
+    }
     triggerHaptic('error');
     rejectPayment(p.id, rejectionReason);
     showAlert(`Payment rejected for ${p.customerName}.`);
     setSelectedPayment(null);
     setRejectionReason('');
   };
+
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventForm.bannerUrl) { alert('Please upload an event banner.'); return; }
+    if (!eventForm.bannerUrl) {
+      alert('Please upload an event banner.');
+      return;
+    }
     triggerHaptic('success');
+
+    const totalQty = Number(eventForm.ticketQuantity) || 100;
     const newEvt = createNewEvent({
       organizationId: currentOrganization.id,
       organizationName: currentOrganization.name,
-      ...eventForm, status: 'published', totalQuantity: 500
+      name: eventForm.name,
+      description: eventForm.description,
+      bannerUrl: eventForm.bannerUrl,
+      logoUrl: eventForm.logoUrl,
+      date: eventForm.date,
+      startTime: eventForm.startTime,
+      endTime: eventForm.endTime,
+      venue: eventForm.venue,
+      address: eventForm.address,
+      googleMapsUrl: eventForm.googleMapsUrl,
+      contactPhone: eventForm.contactPhone,
+      status: 'published',
+      totalQuantity: totalQty
     });
-    firestoreService.addTicketType({
-      eventId: newEvt.id, organizationId: currentOrganization.id,
-      name: 'Regular Admission', description: 'General entry pass',
-      price: 500, currency: 'ETB', totalQuantity: 500, remainingQuantity: 500, maxPerCustomer: 10
-    });
+
+    // Custom initial ticket type with organizer's chosen price (NO preset 500 ETB!)
+    if (eventForm.ticketName.trim()) {
+      firestoreService.addTicketType({
+        eventId: newEvt.id,
+        organizationId: currentOrganization.id,
+        name: eventForm.ticketName.trim(),
+        description: 'Admission ticket',
+        price: Number(eventForm.ticketPrice) || 0,
+        currency: 'ETB',
+        totalQuantity: totalQty,
+        remainingQuantity: totalQty,
+        maxPerCustomer: 5
+      });
+    }
+
     setShowCreateEvent(false);
     showAlert(`Event "${newEvt.name}" published!`);
     refreshOrgData();
   };
+
   const handleAddTicketType = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showTicketTypeModal) return;
     triggerHaptic('success');
+
     firestoreService.addTicketType({
-      eventId: showTicketTypeModal, organizationId: currentOrganization.id,
-      name: ticketTypeForm.name, description: ticketTypeForm.description,
-      price: Number(ticketTypeForm.price), currency: 'ETB',
+      eventId: showTicketTypeModal,
+      organizationId: currentOrganization.id,
+      name: ticketTypeForm.name,
+      description: ticketTypeForm.description,
+      price: Number(ticketTypeForm.price),
+      currency: 'ETB',
       totalQuantity: Number(ticketTypeForm.totalQuantity),
       remainingQuantity: Number(ticketTypeForm.totalQuantity),
       maxPerCustomer: Number(ticketTypeForm.maxPerCustomer)
     });
+
     setShowTicketTypeModal(null);
     showAlert('Ticket type added!');
     refreshOrgData();
+  };
+
+  const shareUrl = sharingEvent
+    ? `${window.location.origin}/?event=${sharingEvent.id}`
+    : '';
+
+  const handleCopyShareLink = () => {
+    triggerHaptic('success');
+    navigator.clipboard.writeText(shareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleShareTelegram = () => {
+    triggerHaptic('impact');
+    if (!sharingEvent) return;
+    const shareText = encodeURIComponent(`🎟️ Get tickets for "${sharingEvent.name}" on Telegram!\n📅 ${sharingEvent.date} at ${sharingEvent.venue}`);
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${shareText}`;
+    window.open(tgUrl, '_blank');
   };
 
   return (
@@ -131,16 +307,47 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
         <div style={{ flex: 1 }}>
           <div className="tg-header__title" style={{ fontSize: 16 }}>{currentOrganization.name}</div>
         </div>
-        <button
-          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--tg-accent)', color: '#fff', border: 'none', borderRadius: 'var(--tg-radius-sm)', padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-          onClick={() => setShowCreateEvent(true)}
-        >
-          <PlusCircle style={{ width: 15, height: 15 }} /> New Event
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'rgba(155,89,182,0.18)',
+              color: 'var(--tg-purple)',
+              border: 'none',
+              borderRadius: 'var(--tg-radius-sm)',
+              padding: '7px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            onClick={() => setActiveTab('scanner')}
+          >
+            <QrCode style={{ width: 14, height: 14 }} /> Scan
+          </button>
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'var(--tg-accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--tg-radius-sm)',
+              padding: '7px 12px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            onClick={() => setShowCreateEvent(true)}
+          >
+            <PlusCircle style={{ width: 15, height: 15 }} /> New Event
+          </button>
+        </div>
       </div>
 
       <div className="tg-content">
-
         {/* ── Org Status Banner ────────────────────────────────────────── */}
         <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '14px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -149,7 +356,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
             </div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{currentOrganization.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--tg-hint)' }}>{currentOrganization.city}</div>
+              <div style={{ fontSize: 12, color: 'var(--tg-hint)' }}>{currentOrganization.city || 'Verified Organizer'}</div>
             </div>
           </div>
           <span className={`tg-pill ${currentOrganization.status === 'approved' ? 'tg-pill--green' : 'tg-pill--amber'}`}>
@@ -165,7 +372,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
             <span className="tg-stat__sub" style={{ color: 'var(--tg-accent)' }}>{activeEvents} live</span>
           </div>
           <div className="tg-stat">
-            <span className="tg-stat__label">Tickets</span>
+            <span className="tg-stat__label">Tickets Sold</span>
             <span className="tg-stat__value">{totalTicketsSold}</span>
             <span className="tg-stat__sub" style={{ color: pendingPayments.length > 0 ? 'var(--tg-amber)' : 'var(--tg-hint)' }}>
               {pendingPayments.length} pending
@@ -178,11 +385,12 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* ── Tabs ────────────────────────────────────────────────────── */}
+        {/* ── Tabs (Includes Scan Tickets) ────────────────────────────── */}
         <div className="tg-tabs" style={{ padding: '0 0 12px' }}>
           {([ 
             { key: 'events' as const, label: `Events (${orgEvents.length})`, count: 0 },
             { key: 'payments' as const, label: 'Payments', count: pendingPayments.length },
+            { key: 'scanner' as const, label: 'Scan Tickets', count: 0 },
             { key: 'tickets' as const, label: `Tickets (${allTickets.length})`, count: 0 },
             { key: 'analytics' as const, label: 'Analytics', count: 0 },
           ]).map(({ key, label, count }) => (
@@ -200,7 +408,9 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '40px 20px', textAlign: 'center' }}>
                 <Calendar style={{ width: 44, height: 44, color: 'var(--tg-hint)', margin: '0 auto 12px' }} />
                 <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--tg-text)' }}>No Events Yet</div>
-                <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginTop: 6, marginBottom: 20 }}>Create your first event to start selling tickets.</div>
+                <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginTop: 6, marginBottom: 20 }}>
+                  Create your first event to start selling tickets without any preset pricing restrictions.
+                </div>
                 <button className="tg-btn tg-btn--primary" style={{ maxWidth: 200, margin: '0 auto' }} onClick={() => setShowCreateEvent(true)}>
                   <PlusCircle style={{ width: 16, height: 16 }} /> Create Event
                 </button>
@@ -224,11 +434,12 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
                     </div>
                     <span className={`tg-pill ${evt.status === 'published' ? 'tg-pill--green' : 'tg-pill--amber'}`}>{evt.status}</span>
                   </div>
-                  {/* Ticket types */}
+
+                  {/* Ticket types list */}
                   <div style={{ padding: '10px 16px' }}>
                     <div style={{ fontSize: 11, color: 'var(--tg-hint)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>Ticket Types</div>
                     {evtTicketTypes.length === 0 ? (
-                      <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginBottom: 8 }}>No ticket types yet.</div>
+                      <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginBottom: 8 }}>No ticket types added yet.</div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                         {evtTicketTypes.map((tt) => (
@@ -237,25 +448,45 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
                               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tg-text)' }}>{tt.name}</div>
                               <div style={{ fontSize: 11, color: 'var(--tg-hint)', marginTop: 1 }}>{tt.remainingQuantity}/{tt.totalQuantity} remaining</div>
                             </div>
-                            <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--tg-green)' }}>{tt.price} ETB</span>
+                            <span style={{ fontWeight: 700, fontSize: 14, color: tt.price === 0 ? 'var(--tg-green)' : 'var(--tg-text)', fontFamily: 'monospace' }}>
+                              {tt.price === 0 ? 'FREE' : `${tt.price} ETB`}
+                            </span>
                           </div>
                         ))}
                       </div>
                     )}
-                    <div style={{ display: 'flex', gap: 8 }}>
+
+                    {/* Event Actions: Share & QR, Scan, Add Ticket Type */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                       <button
                         className="tg-btn tg-btn--secondary tg-btn--sm"
-                        style={{ flex: 1 }}
-                        onClick={() => onNavigate('public_event', { eventId: evt.id })}
+                        style={{ flex: 1, minWidth: '110px' }}
+                        onClick={() => {
+                          triggerHaptic('impact');
+                          setSharingEvent(evt);
+                        }}
                       >
-                        <ExternalLink style={{ width: 14, height: 14 }} /> Public Page
+                        <Share2 style={{ width: 14, height: 14 }} /> Share & QR
                       </button>
+
+                      <button
+                        className="tg-btn tg-btn--secondary tg-btn--sm"
+                        style={{ flex: 1, minWidth: '110px' }}
+                        onClick={() => {
+                          triggerHaptic('impact');
+                          setScannerSelectedEventId(evt.id);
+                          setActiveTab('scanner');
+                        }}
+                      >
+                        <QrCode style={{ width: 14, height: 14 }} /> Scan Tickets
+                      </button>
+
                       <button
                         className="tg-btn tg-btn--primary tg-btn--sm"
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: '110px' }}
                         onClick={() => setShowTicketTypeModal(evt.id)}
                       >
-                        <PlusCircle style={{ width: 14, height: 14 }} /> Add Ticket Type
+                        <PlusCircle style={{ width: 14, height: 14 }} /> + Ticket Type
                       </button>
                     </div>
                   </div>
@@ -299,11 +530,19 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         </a>
                       </div>
                     )}
-                    <div style={{ padding: '10px 16px 14px', display: 'flex', gap: 10, borderTop: '1px solid var(--tg-divider)' }}>
-                      <button className="tg-btn tg-btn--success tg-btn--sm" style={{ flex: 1 }} onClick={() => handleApprovePayment(p)}>
-                        <CheckCircle2 style={{ width: 15, height: 15 }} /> Approve & Issue
+                    <div style={{ padding: '10px 16px 14px', display: 'flex', gap: 8 }}>
+                      <button
+                        className="tg-btn tg-btn--primary tg-btn--sm"
+                        style={{ flex: 1 }}
+                        onClick={() => handleApprovePayment(p)}
+                      >
+                        <CheckCircle2 style={{ width: 15, height: 15 }} /> Approve & Issue Ticket
                       </button>
-                      <button className="tg-btn tg-btn--danger tg-btn--sm" style={{ flex: 1 }} onClick={() => setSelectedPayment(p)}>
+                      <button
+                        className="tg-btn tg-btn--danger tg-btn--sm"
+                        style={{ flex: 1 }}
+                        onClick={() => setSelectedPayment(p)}
+                      >
                         <XCircle style={{ width: 15, height: 15 }} /> Reject
                       </button>
                     </div>
@@ -314,9 +553,79 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </div>
         )}
 
+        {/* ── Scan Tickets Tab (Moved into Organizer Dashboard) ─────────── */}
+        {activeTab === 'scanner' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Event Selector */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '14px 16px' }}>
+              <label className="tg-label">Select Event to Check-In</label>
+              <select
+                className="tg-input"
+                style={{ appearance: 'none', fontWeight: 600 }}
+                value={scannerSelectedEventId}
+                onChange={(e) => setScannerSelectedEventId(e.target.value)}
+              >
+                {orgEvents.length === 0 && <option value="">No events created yet</option>}
+                {orgEvents.map((evt) => (
+                  <option key={evt.id} value={evt.id}>
+                    {evt.name} ({evt.date})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Camera QR Scanner Box */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--tg-divider)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera style={{ width: 18, height: 18, color: 'var(--tg-green)' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tg-text)' }}>Camera QR Scanner</span>
+                <span style={{ fontSize: 12, color: 'var(--tg-hint)', marginLeft: 'auto' }}>Point at attendee QR</span>
+              </div>
+              <div id="org-qr-reader-container" style={{ background: 'var(--tg-bg2)', minHeight: 240 }} />
+            </div>
+
+            {/* Manual Ticket ID Search Form */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '14px 16px' }}>
+              <div style={{ fontSize: 12, color: 'var(--tg-hint)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>
+                Or Enter Ticket ID Manually
+              </div>
+              <form onSubmit={handleManualScanSubmit} style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="tg-input"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: 13 }}
+                  type="text"
+                  placeholder="e.g. EVT-2026-XXXXX"
+                  value={scannerManualInput}
+                  onChange={(e) => setScannerManualInput(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={scannerProcessing || !scannerManualInput.trim()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'var(--tg-purple)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 'var(--tg-radius)',
+                    padding: '0 16px',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  <Search style={{ width: 16, height: 16 }} /> Check In
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* ── Tickets Tab ──────────────────────────────────────────────── */}
         {activeTab === 'tickets' && (
-          <div className="tg-section">
+          <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', overflow: 'hidden' }}>
             {allTickets.length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--tg-hint)', fontSize: 14 }}>No tickets issued yet</div>
             ) : allTickets.map((t) => (
@@ -369,52 +678,147 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
         <div className="spacer-16" />
       </div>
 
-      {/* ── Create Event Sheet ────────────────────────────────────────── */}
+      {/* ── Create Event Sheet (No preset forced price!) ──────────────── */}
       {showCreateEvent && (
         <div className="tg-overlay" onClick={() => setShowCreateEvent(false)}>
-          <div className="tg-sheet" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '92vh' }}>
+          <div className="tg-sheet" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '92vh', overflowY: 'auto' }}>
             <div className="tg-sheet__handle" />
             <div className="tg-sheet__title">
               <span>Create Event</span>
               <button className="tg-sheet__close" onClick={() => setShowCreateEvent(false)}>✕</button>
             </div>
-            <form onSubmit={handleCreateEvent} style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleCreateEvent} style={{ padding: '8px 16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label className="tg-label">Event Name *</label>
-                <input className="tg-input" required value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} placeholder="e.g. Ethiopian Tech Night 2026" />
+                <input
+                  className="tg-input"
+                  required
+                  value={eventForm.name}
+                  onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })}
+                  placeholder="e.g. Addis Tech Summit 2026"
+                />
               </div>
+
               <div>
                 <label className="tg-label">Description *</label>
-                <textarea className="tg-input" rows={3} required value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} placeholder="Describe your event..." style={{ resize: 'none' }} />
+                <textarea
+                  className="tg-input"
+                  rows={3}
+                  required
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                  placeholder="Describe the event, agenda, performers, etc."
+                  style={{ resize: 'none' }}
+                />
               </div>
-              <ImgBBImageUploader label="Event Banner *" value={eventForm.bannerUrl} onChange={(url) => setEventForm({ ...eventForm, bannerUrl: url })} placeholder="Upload event banner" />
+
+              <ImgBBImageUploader
+                label="Event Banner (ImgBB) *"
+                value={eventForm.bannerUrl}
+                onChange={(url) => setEventForm({ ...eventForm, bannerUrl: url })}
+                placeholder="Upload event banner image"
+              />
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label className="tg-label">Date *</label>
-                  <input className="tg-input" type="date" required value={eventForm.date} onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })} />
+                  <input
+                    className="tg-input"
+                    type="date"
+                    required
+                    value={eventForm.date}
+                    onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                  />
                 </div>
                 <div>
                   <label className="tg-label">Start Time *</label>
-                  <input className="tg-input" type="time" required value={eventForm.startTime} onChange={(e) => setEventForm({ ...eventForm, startTime: e.target.value })} />
+                  <input
+                    className="tg-input"
+                    type="time"
+                    required
+                    value={eventForm.startTime}
+                    onChange={(e) => setEventForm({ ...eventForm, startTime: e.target.value })}
+                  />
                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label className="tg-label">Venue *</label>
-                  <input className="tg-input" required value={eventForm.venue} onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })} placeholder="Millennium Hall" />
+                  <input
+                    className="tg-input"
+                    required
+                    value={eventForm.venue}
+                    onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })}
+                    placeholder="e.g. Millennium Hall"
+                  />
                 </div>
                 <div>
-                  <label className="tg-label">Contact Phone *</label>
-                  <input className="tg-input" required value={eventForm.contactPhone} onChange={(e) => setEventForm({ ...eventForm, contactPhone: e.target.value })} />
+                  <label className="tg-label">Contact Phone</label>
+                  <input
+                    className="tg-input"
+                    value={eventForm.contactPhone}
+                    onChange={(e) => setEventForm({ ...eventForm, contactPhone: e.target.value })}
+                  />
                 </div>
               </div>
-              <button type="submit" className="tg-btn tg-btn--primary">Publish Event</button>
+
+              {/* Custom Initial Ticket Type & Pricing Setup (NO PRESET 500 ETB!) */}
+              <div style={{ background: 'var(--tg-bg2)', borderRadius: 'var(--tg-radius-lg)', padding: '14px', border: '1px solid var(--tg-card-border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tg-accent)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Ticket style={{ width: 16, height: 16 }} /> Initial Ticket & Custom Price
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--tg-hint)', marginBottom: 12 }}>
+                  Set your own ticket name and price. Enter 0 for free events.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label className="tg-label">Ticket Name</label>
+                    <input
+                      className="tg-input"
+                      value={eventForm.ticketName}
+                      onChange={(e) => setEventForm({ ...eventForm, ticketName: e.target.value })}
+                      placeholder="e.g. Standard, VIP, Early Bird"
+                    />
+                  </div>
+                  <div>
+                    <label className="tg-label">Price (ETB) *</label>
+                    <input
+                      className="tg-input"
+                      type="number"
+                      min="0"
+                      required
+                      value={eventForm.ticketPrice}
+                      onChange={(e) => setEventForm({ ...eventForm, ticketPrice: e.target.value })}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="tg-label">Tickets Available</label>
+                  <input
+                    className="tg-input"
+                    type="number"
+                    min="1"
+                    required
+                    value={eventForm.ticketQuantity}
+                    onChange={(e) => setEventForm({ ...eventForm, ticketQuantity: e.target.value })}
+                    placeholder="100"
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="tg-btn tg-btn--primary">
+                Publish Event
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* ── Add Ticket Type Sheet ─────────────────────────────────────── */}
+      {/* ── Add Extra Ticket Type Sheet ───────────────────────────────── */}
       {showTicketTypeModal && (
         <div className="tg-overlay" onClick={() => setShowTicketTypeModal(null)}>
           <div className="tg-sheet" onClick={(e) => e.stopPropagation()}>
@@ -423,54 +827,218 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               <span>Add Ticket Type</span>
               <button className="tg-sheet__close" onClick={() => setShowTicketTypeModal(null)}>✕</button>
             </div>
-            <form onSubmit={handleAddTicketType} style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleAddTicketType} style={{ padding: '8px 16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label className="tg-label">Name *</label>
-                <input className="tg-input" required value={ticketTypeForm.name} onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, name: e.target.value })} placeholder="VIP, Regular, Student..." />
+                <label className="tg-label">Ticket Name *</label>
+                <input
+                  className="tg-input"
+                  required
+                  value={ticketTypeForm.name}
+                  onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, name: e.target.value })}
+                  placeholder="VIP, Early Bird, Student, Backstage..."
+                />
               </div>
               <div>
                 <label className="tg-label">Price (ETB) *</label>
-                <input className="tg-input" type="number" required value={ticketTypeForm.price} onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, price: Number(e.target.value) })} />
+                <input
+                  className="tg-input"
+                  type="number"
+                  min="0"
+                  required
+                  value={ticketTypeForm.price}
+                  onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, price: Number(e.target.value) })}
+                  placeholder="0"
+                />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label className="tg-label">Quantity *</label>
-                  <input className="tg-input" type="number" required value={ticketTypeForm.totalQuantity} onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, totalQuantity: Number(e.target.value) })} />
+                  <input
+                    className="tg-input"
+                    type="number"
+                    min="1"
+                    required
+                    value={ticketTypeForm.totalQuantity}
+                    onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, totalQuantity: Number(e.target.value) })}
+                  />
                 </div>
                 <div>
                   <label className="tg-label">Max/Customer</label>
-                  <input className="tg-input" type="number" required value={ticketTypeForm.maxPerCustomer} onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, maxPerCustomer: Number(e.target.value) })} />
+                  <input
+                    className="tg-input"
+                    type="number"
+                    min="1"
+                    required
+                    value={ticketTypeForm.maxPerCustomer}
+                    onChange={(e) => setTicketTypeForm({ ...ticketTypeForm, maxPerCustomer: Number(e.target.value) })}
+                  />
                 </div>
               </div>
-              <button type="submit" className="tg-btn tg-btn--primary">Save Ticket Type</button>
+              <button type="submit" className="tg-btn tg-btn--primary">
+                Save Ticket Type
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* ── Reject Payment Sheet ──────────────────────────────────────── */}
+      {/* ── Share Event & QR Code Sheet (Requirement 2) ──────────────── */}
+      {sharingEvent && (
+        <div className="tg-overlay" onClick={() => setSharingEvent(null)}>
+          <div className="tg-sheet" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div className="tg-sheet__handle" />
+            <div className="tg-sheet__title">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Share2 style={{ width: 16, height: 16, color: 'var(--tg-accent)' }} />
+                Share Event & QR Code
+              </span>
+              <button className="tg-sheet__close" onClick={() => setSharingEvent(null)}>✕</button>
+            </div>
+
+            <div style={{ padding: '12px 16px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--tg-text)' }}>{sharingEvent.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--tg-hint)' }}>
+                {sharingEvent.date} · {sharingEvent.venue}
+              </div>
+
+              {/* QR Code Container */}
+              <div style={{ background: '#ffffff', padding: 14, borderRadius: 'var(--tg-radius-lg)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', margin: '4px 0' }}>
+                <QRCodeSVG value={shareUrl} size={180} level="M" />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--tg-hint)' }}>
+                Attendees scan this QR code to view tickets and buy directly.
+              </div>
+
+              {/* Copy URL Box */}
+              <div style={{ display: 'flex', width: '100%', gap: 8 }}>
+                <input
+                  className="tg-input"
+                  style={{ fontSize: 12, fontFamily: 'monospace', flex: 1 }}
+                  readOnly
+                  value={shareUrl}
+                />
+                <button
+                  onClick={handleCopyShareLink}
+                  style={{
+                    background: copiedLink ? 'var(--tg-green)' : 'var(--tg-accent)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 'var(--tg-radius)',
+                    padding: '0 16px',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedLink ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+
+              {/* Share to Telegram Button */}
+              <button
+                onClick={handleShareTelegram}
+                className="tg-btn tg-btn--primary"
+                style={{ width: '100%' }}
+              >
+                <Send style={{ width: 16, height: 16 }} /> Share via Telegram
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Scan Check-in Result Modal ───────────────────────────────── */}
+      {scannerResult && (
+        <div className="tg-overlay tg-overlay--center" onClick={() => setScannerResult(null)}>
+          <div
+            className="tg-sheet--center"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: 'var(--tg-radius-xl)',
+              background: 'var(--tg-bg)',
+              textAlign: 'center',
+              maxWidth: 340,
+              padding: '24px',
+              border: scannerResult.success
+                ? '2px solid rgba(77,205,94,0.4)'
+                : scannerResult.resultCode === 'already_used'
+                ? '2px solid rgba(229,57,53,0.4)'
+                : '2px solid rgba(245,166,35,0.4)'
+            }}
+          >
+            <div style={{
+              width: 72, height: 72,
+              borderRadius: '50%',
+              background: scannerResult.success ? 'rgba(77,205,94,0.15)' : scannerResult.resultCode === 'already_used' ? 'rgba(229,57,53,0.15)' : 'rgba(245,166,35,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 14px'
+            }}>
+              {scannerResult.success
+                ? <CheckCircle2 style={{ width: 40, height: 40, color: 'var(--tg-green)' }} />
+                : scannerResult.resultCode === 'already_used'
+                ? <XCircle style={{ width: 40, height: 40, color: 'var(--tg-red)' }} />
+                : <AlertTriangle style={{ width: 40, height: 40, color: 'var(--tg-amber)' }} />
+              }
+            </div>
+
+            <div style={{
+              fontSize: 20, fontWeight: 800,
+              color: scannerResult.success ? 'var(--tg-green)' : scannerResult.resultCode === 'already_used' ? 'var(--tg-red)' : 'var(--tg-amber)',
+              marginBottom: 6
+            }}>
+              {scannerResult.message}
+            </div>
+
+            {scannerResult.ticket && (
+              <div style={{ background: 'var(--tg-bg2)', borderRadius: 'var(--tg-radius)', padding: '10px 14px', margin: '12px 0', textAlign: 'left', fontSize: 12 }}>
+                <div><strong>Attendee:</strong> {scannerResult.ticket.customerName}</div>
+                <div><strong>Ticket:</strong> {scannerResult.ticket.ticketTypeName} ({scannerResult.ticket.id})</div>
+              </div>
+            )}
+
+            <button
+              className="tg-btn tg-btn--primary"
+              style={{ marginTop: 12 }}
+              onClick={() => setScannerResult(null)}
+            >
+              Scan Next Ticket
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rejection Reason Modal ────────────────────────────────────── */}
       {selectedPayment && (
         <div className="tg-overlay" onClick={() => setSelectedPayment(null)}>
           <div className="tg-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="tg-sheet__handle" />
             <div className="tg-sheet__title">
-              <span style={{ color: 'var(--tg-red)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <XCircle style={{ width: 18, height: 18 }} /> Reject Payment
-              </span>
+              <span>Reject Payment</span>
               <button className="tg-sheet__close" onClick={() => setSelectedPayment(null)}>✕</button>
             </div>
-            <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ fontSize: 14, color: 'var(--tg-hint)', lineHeight: 1.6, margin: 0 }}>
-                Rejecting {selectedPayment.amount} ETB payment from {selectedPayment.customerName}.
-              </p>
-              <div>
-                <label className="tg-label">Rejection Reason *</label>
-                <textarea className="tg-input" rows={3} value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} placeholder="e.g. Payment amount doesn't match..." style={{ resize: 'none' }} />
+            <div style={{ padding: '8px 16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 13, color: 'var(--tg-hint)' }}>
+                Please provide the reason for rejecting {selectedPayment.customerName}'s payment submission.
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="tg-btn tg-btn--secondary" style={{ flex: 1 }} onClick={() => setSelectedPayment(null)}>Cancel</button>
-                <button className="tg-btn tg-btn--danger" style={{ flex: 1 }} onClick={() => handleRejectPayment(selectedPayment)}>Confirm Reject</button>
-              </div>
+              <textarea
+                className="tg-input"
+                rows={3}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="e.g. Receipt unreadable, incorrect amount transferred, etc."
+                style={{ resize: 'none' }}
+              />
+              <button
+                className="tg-btn tg-btn--danger"
+                onClick={() => handleRejectPayment(selectedPayment)}
+              >
+                Confirm Rejection
+              </button>
             </div>
           </div>
         </div>
