@@ -93,9 +93,29 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
 
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTicket) return;
-    triggerHaptic('impact');
-    setCheckoutStep('payment');
+    if (!event || !activeTicket) return;
+
+    if (activeTicket.price === 0 || totalPrice === 0) {
+      triggerHaptic('success');
+      setIsSubmitting(true);
+
+      firestoreService.submitOrderAndPayment(
+        event.id,
+        activeTicket.id,
+        customerName,
+        customerPhone,
+        customerEmail,
+        quantity,
+        'Free Pass',
+        ''
+      );
+
+      setIsSubmitting(false);
+      setCheckoutStep('completed');
+    } else {
+      triggerHaptic('impact');
+      setCheckoutStep('payment');
+    }
   };
 
   const handleFinalSubmitPayment = (e: React.FormEvent) => {
@@ -448,8 +468,10 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
                 </span>
               </div>
 
-              <button type="submit" className="tg-btn tg-btn--primary">
-                Proceed to Payment Instructions →
+              <button type="submit" disabled={isSubmitting} className="tg-btn tg-btn--primary">
+                {totalPrice === 0 || activeTicket.price === 0
+                  ? 'Get Free Ticket 🎟️'
+                  : 'Proceed to Payment Instructions →'}
               </button>
             </form>
           </div>

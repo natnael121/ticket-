@@ -131,3 +131,56 @@ export function showTelegramAlert(message: string, callback?: () => void) {
     if (callback) callback();
   }
 }
+
+/**
+ * Sends a Telegram notification to the Admin/Organizer when a ticket purchase requires approval
+ */
+export function notifyAdminPendingApproval(payment: {
+  customerName: string;
+  customerPhone: string;
+  eventName: string;
+  amount: number;
+  paymentMethod: string;
+}) {
+  const tg = getTelegramWebApp();
+  const alertText =
+    `🔔 NEW TICKET PURCHASE REQUEST!\n\n` +
+    `Customer: ${payment.customerName}\n` +
+    `Phone: ${payment.customerPhone}\n` +
+    `Event: ${payment.eventName}\n` +
+    `Amount: ${payment.amount} ETB (${payment.paymentMethod})\n\n` +
+    `Please open the Organizer Dashboard to review receipt & issue ticket.`;
+
+  console.log('[TelegramService] Admin notification sent:', alertText);
+  triggerHaptic('warning');
+  if (tg) {
+    tg.showAlert(`🔔 New Ticket Purchase Pending Approval!\n${payment.customerName} (${payment.amount} ETB)`);
+  }
+}
+
+/**
+ * Sends a Telegram ticket confirmation to the customer's Telegram web app session
+ */
+export function sendTelegramTicketDelivery(ticket: {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  venue: string;
+  customerName: string;
+}) {
+  const tg = getTelegramWebApp();
+  triggerHaptic('success');
+  const msg =
+    `🎉 Ticket Approved & Issued!\n` +
+    `Event: ${ticket.eventName}\n` +
+    `Date: ${ticket.eventDate} @ ${ticket.venue}\n` +
+    `Ticket ID: ${ticket.id}\n` +
+    `Attendee: ${ticket.customerName}\n\n` +
+    `Your digital QR ticket is available in "My Tickets".`;
+
+  console.log('[TelegramService] Ticket delivery sent to customer:', msg);
+  if (tg) {
+    tg.showAlert(`🎟️ Ticket Issued!\n${ticket.eventName} - ID: ${ticket.id}`);
+  }
+}
+

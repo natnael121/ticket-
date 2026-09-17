@@ -31,6 +31,8 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { sendTicketSmsNotification } from './geezSmsService';
+import { notifyAdminPendingApproval, sendTelegramTicketDelivery } from './telegramService';
 
 // ─── Local cache key ────────────────────────────────────────────────────────
 const LOCAL_STORAGE_KEY = 'tik_app_firestore_cache_v1';
@@ -581,6 +583,7 @@ export class FirestoreService {
     const orderId = `ord_${Date.now()}`;
     const paymentId = `pay_${Date.now()}`;
     const totalPrice = ticketType.price * quantity;
+    const isFree = totalPrice === 0 || ticketType.price === 0;
 
     const newOrder: TicketOrder = {
       id: orderId,
@@ -596,7 +599,7 @@ export class FirestoreService {
       quantity,
       unitPrice: ticketType.price,
       totalPrice,
-      status: 'pending_payment',
+      status: isFree ? 'approved' : 'pending_payment',
       paymentId,
       createdAt: new Date().toISOString()
     };
@@ -610,9 +613,9 @@ export class FirestoreService {
       customerName,
       customerPhone,
       amount: totalPrice,
-      paymentMethod,
-      screenshotUrl,
-      status: 'pending',
+      paymentMethod: isFree ? 'Free Pass' : paymentMethod,
+      screenshotUrl: isFree ? '' : screenshotUrl,
+      status: isFree ? 'approved' : 'pending',
       createdAt: new Date().toISOString()
     };
 
@@ -625,6 +628,14 @@ export class FirestoreService {
       await setDoc(doc(db, 'orders', newOrder.id), sanitize(newOrder));
       await setDoc(doc(db, 'payments', newPayment.id), sanitize(newPayment));
     });
+
+    if (isFree) {
+      // Auto-issue tickets instantly for free ticket claims (no screenshot required)
+      this.approvePayment(paymentId, 'System Free Claim Auto-Approval');
+    } else {
+      // Send Telegram notification to Admin / Organizer for pending approval
+      notifyAdminPendingApproval(newPayment);
+    }
 
     return { order: newOrder, payment: newPayment };
   }
@@ -736,6 +747,14 @@ export class FirestoreService {
       );
       await updateDoc(doc(db, 'orders', order.id), { status: 'approved' });
     });
+
+    // Dispatch SMS via GeezSMS and Telegram notifications to customer for approved tickets
+    for (const ticket of generatedTickets) {
+      sendTicketSmsNotification(ticket).catch((err) =>
+        console.warn('[FirestoreService] GeezSMS error:', err)
+      );
+      sendTelegramTicketDelivery(ticket);
+    }
 
     return { payment, tickets: generatedTickets };
   }
