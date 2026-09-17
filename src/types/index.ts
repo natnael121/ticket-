@@ -59,12 +59,32 @@ export interface Organization {
 
 export type EventStatus = 'draft' | 'published' | 'closed' | 'completed' | 'cancelled';
 
+export interface EventCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  bg: string;
+}
+
+export const EVENT_CATEGORIES: EventCategory[] = [
+  { id: 'all', name: 'All Events', icon: '✨', color: '#64b5ef', bg: 'rgba(36,129,204,0.15)' },
+  { id: 'music', name: 'Music & Concerts', icon: '🎵', color: '#ab47bc', bg: 'rgba(171,71,188,0.15)' },
+  { id: 'tech', name: 'Tech & Innovation', icon: '💻', color: '#26c6da', bg: 'rgba(38,198,218,0.15)' },
+  { id: 'party', name: 'Nightlife & Parties', icon: '🎉', color: '#ec407a', bg: 'rgba(236,64,122,0.15)' },
+  { id: 'business', name: 'Business & Networking', icon: '💼', color: '#ffa726', bg: 'rgba(255,167,38,0.15)' },
+  { id: 'sports', name: 'Sports & Fitness', icon: '⚽', color: '#66bb6a', bg: 'rgba(102,187,106,0.15)' },
+  { id: 'arts', name: 'Arts & Culture', icon: '🎨', color: '#ff7043', bg: 'rgba(255,112,67,0.15)' },
+  { id: 'general', name: 'General & Others', icon: '🌟', color: '#78909c', bg: 'rgba(120,144,156,0.15)' },
+];
+
 export interface EventItem {
   id: string;
   organizationId: string;
   organizationName?: string;
   name: string;
   description: string;
+  category?: string;
   bannerUrl: string;
   logoUrl?: string;
   date: string;
@@ -80,6 +100,7 @@ export interface EventItem {
   revenue: number;
   createdAt: string;
 }
+
 
 export interface TicketType {
   id: string;

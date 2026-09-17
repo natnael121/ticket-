@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { firestoreService } from '../services/firestoreService';
 import { processTicketCheckIn, CheckInResult } from '../services/ticketService';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
-import { PaymentSubmission, EventItem, TicketType } from '../types';
+import { PaymentSubmission, EventItem, TicketType, EVENT_CATEGORIES } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import confetti from 'canvas-confetti';
@@ -52,6 +52,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const [eventForm, setEventForm] = useState({
     name: '',
     description: '',
+    category: 'music',
     bannerUrl: '',
     logoUrl: '',
     date: new Date().toISOString().split('T')[0],
@@ -223,6 +224,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
       organizationName: currentOrganization.name,
       name: eventForm.name,
       description: eventForm.description,
+      category: eventForm.category || 'music',
       bannerUrl: eventForm.bannerUrl,
       logoUrl: eventForm.logoUrl,
       date: eventForm.date,
@@ -743,6 +745,22 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               </div>
 
               <div>
+                <label className="tg-label">Event Category *</label>
+                <select
+                  className="tg-input"
+                  required
+                  value={eventForm.category}
+                  onChange={(e) => setEventForm({ ...eventForm, category: e.target.value })}
+                >
+                  {EVENT_CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="tg-label">Description *</label>
                 <textarea
                   className="tg-input"
@@ -756,10 +774,11 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               </div>
 
               <ImgBBImageUploader
-                label="Event Banner (ImgBB) *"
+                label="Event Banner (Image / Preset) *"
                 value={eventForm.bannerUrl}
                 onChange={(url) => setEventForm({ ...eventForm, bannerUrl: url })}
-                placeholder="Upload event banner image"
+                placeholder="Upload file, paste URL, or pick preset"
+                selectedCategory={eventForm.category}
               />
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

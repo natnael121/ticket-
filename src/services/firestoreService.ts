@@ -516,6 +516,7 @@ export class FirestoreService {
   ): EventItem {
     const newEvent: EventItem = {
       ...event,
+      category: event.category || 'general',
       id: `evt_${Date.now()}`,
       ticketsSold: 0,
       revenue: 0,
