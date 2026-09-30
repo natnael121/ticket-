@@ -38,6 +38,7 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
     return firestoreService.subscribe(() => setTick((t) => t + 1));
   }, []);
 
+  const isLoaded = firestoreService.isInitialLoadDone;
   const allEvents = firestoreService.getEvents();
   const event = firestoreService.getEvent(eventId) || (eventId ? allEvents.find((e) => e.id === eventId) : allEvents[0]);
   const organization = event ? firestoreService.getOrganization(event.organizationId) : null;
@@ -147,6 +148,22 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
     setIsSubmitting(false);
     setCheckoutStep('completed');
   };
+
+  // Still waiting for Firestore initial snapshot — show spinner
+  if (!isLoaded && !event) {
+    return (
+      <div className="tg-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: '50%',
+          border: '3px solid rgba(36,129,204,0.2)',
+          borderTopColor: 'var(--tg-accent)',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+        <div style={{ fontSize: 14, color: 'var(--tg-hint)' }}>Loading event…</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   if (!event) {
     return (

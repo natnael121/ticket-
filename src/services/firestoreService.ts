@@ -82,10 +82,15 @@ export class FirestoreService {
   private listeners: Array<() => void> = [];
   public hasPermissionError = false;
   public lastErrorMessage = '';
+  public isInitialLoadDone = false; // true after first Firestore events snapshot
   private authReady: Promise<void>;
 
   constructor() {
     this.state = this.loadCachedState();
+    // If we restored events from localStorage cache, treat initial load as done
+    if (this.state.events.length > 0) {
+      this.isInitialLoadDone = true;
+    }
     this.authReady = this.initAuth();
     if (isFirebaseConfigured) {
       this.initFirestoreSync();
@@ -228,6 +233,7 @@ export class FirestoreService {
       (l, r) => this.mergeById(l, r),
       (items) => {
         this.state.events = this.mergeById(this.state.events, items);
+        this.isInitialLoadDone = true;
       }
     );
     watch<TicketType>(
@@ -521,7 +527,7 @@ export class FirestoreService {
       this.saveCachedState();
       this.notify();
       this.fsWrite(`updateOrganization(${orgId})`, () =>
-        updateDoc(doc(db, 'organizations', orgId), sanitize(updates))
+        updateDoc(doc(db, 'organizations', orgId), sanitize(merged))
       );
       return merged;
     }
