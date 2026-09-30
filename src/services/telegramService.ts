@@ -111,6 +111,44 @@ export function getTelegramBotLink(startParam: string): string {
   return `https://t.me/${botUsername}?start=${startParam}`;
 }
 
+/**
+ * Sends a real Telegram message to a user via the Bot API.
+ * Requires VITE_TELEGRAM_BOT_TOKEN in .env.
+ * @param chatId - The user's numeric Telegram ID (from initDataUnsafe.user.id)
+ * @param text   - Message text (supports HTML parse_mode)
+ */
+export async function sendTelegramBotMessage(
+  chatId: number | string,
+  text: string
+): Promise<boolean> {
+  const token = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.warn('[TelegramBot] VITE_TELEGRAM_BOT_TOKEN not set — skipping bot message.');
+    return false;
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML'
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.warn('[TelegramBot] sendMessage failed:', data.description);
+      return false;
+    }
+    console.log('[TelegramBot] Message sent to', chatId);
+    return true;
+  } catch (err) {
+    console.error('[TelegramBot] Error sending message:', err);
+    return false;
+  }
+}
+
 export function getTelegramUser() {
   const tg = getTelegramWebApp();
   return tg?.initDataUnsafe?.user || null;

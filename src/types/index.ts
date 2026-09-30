@@ -185,6 +185,7 @@ export interface DigitalTicket {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerTelegramId?: number | string; // Telegram numeric user ID for bot notifications
   price: number;
   status: TicketStatus;
   qrData: string;

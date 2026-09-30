@@ -32,7 +32,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { sendTicketSmsNotification } from './geezSmsService';
-import { notifyAdminPendingApproval, sendTelegramTicketDelivery } from './telegramService';
+import { notifyAdminPendingApproval, sendTelegramTicketDelivery, sendTelegramBotMessage, getTelegramBotLink } from './telegramService';
 
 // ─── Local cache key ────────────────────────────────────────────────────────
 const LOCAL_STORAGE_KEY = 'tik_app_firestore_cache_v1';
@@ -630,7 +630,8 @@ export class FirestoreService {
     customerEmail: string,
     quantity: number,
     paymentMethod: string,
-    screenshotUrl: string
+    screenshotUrl: string,
+    telegramUserId?: number | string
   ): { order: TicketOrder; payment: PaymentSubmission } {
     const event = this.getEvent(eventId);
     const ticketType = (this.state.ticketTypes || []).find((t) => t.id === ticketTypeId);
@@ -652,6 +653,7 @@ export class FirestoreService {
       customerName,
       customerPhone,
       customerEmail,
+      telegramUserId: telegramUserId ? String(telegramUserId) : undefined,
       quantity,
       unitPrice: ticketType.price,
       totalPrice,
@@ -747,6 +749,7 @@ export class FirestoreService {
         customerName: order.customerName,
         customerPhone: order.customerPhone,
         customerEmail: order.customerEmail,
+        customerTelegramId: order.telegramUserId,
         price: order.unitPrice,
         status: 'valid',
         qrData: ticketId,
@@ -804,12 +807,29 @@ export class FirestoreService {
       await updateDoc(doc(db, 'orders', order.id), { status: 'approved' });
     });
 
-    // Dispatch SMS via GeezSMS and Telegram notifications to customer for approved tickets
+    // Dispatch SMS via GeezSMS and Telegram bot message to customer for approved tickets
     for (const ticket of generatedTickets) {
       sendTicketSmsNotification(ticket).catch((err) =>
         console.warn('[FirestoreService] GeezSMS error:', err)
       );
       sendTelegramTicketDelivery(ticket);
+
+      // Send real Telegram bot message if we have the customer's Telegram ID
+      if (ticket.customerTelegramId) {
+        const botLink = getTelegramBotLink(`event_${ticket.eventId}`);
+        const tgMessage =
+          `🎟️ <b>Ticket Confirmed!</b>\n\n` +
+          `Your ticket for <b>${ticket.eventName}</b> is ready!\n\n` +
+          `📅 <b>Date:</b> ${ticket.eventDate} at ${ticket.eventTime}\n` +
+          `📍 <b>Venue:</b> ${ticket.venue}\n` +
+          `🎫 <b>Type:</b> ${ticket.ticketTypeName}\n` +
+          `🪪 <b>Ticket ID:</b> <code>${ticket.id}</code>\n` +
+          `👤 <b>Attendee:</b> ${ticket.customerName}\n\n` +
+          `<a href="${botLink}">Open your ticket in the app →</a>`;
+        sendTelegramBotMessage(ticket.customerTelegramId, tgMessage).catch((err) =>
+          console.warn('[FirestoreService] Telegram bot message error:', err)
+        );
+      }
     }
 
     return { payment, tickets: generatedTickets };

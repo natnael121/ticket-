@@ -109,7 +109,8 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
         customerEmail,
         quantity,
         'Free Pass',
-        ''
+        '',
+        tgUser?.id
       );
 
       setIsSubmitting(false);
@@ -139,7 +140,8 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
       customerEmail,
       quantity,
       selectedPaymentMethod,
-      screenshotUrl
+      screenshotUrl,
+      tgUser?.id
     );
 
     setIsSubmitting(false);
