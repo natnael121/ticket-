@@ -609,6 +609,15 @@ export class FirestoreService {
     return undefined;
   }
 
+  public deleteEvent(eventId: string): void {
+    this.state.events = this.state.events.filter((e) => e.id !== eventId);
+    this.saveCachedState();
+    this.notify();
+    this.fsWrite(`deleteEvent(${eventId})`, () =>
+      deleteDoc(doc(db, 'events', eventId))
+    );
+  }
+
   // ── Ticket Types ──────────────────────────────────────────────────────────
 
   public getTicketTypes(eventId: string): TicketType[] {

@@ -16,7 +16,8 @@ import {
   Users, TrendingUp, AlertCircle, ChevronLeft,
   ExternalLink, Clock, MapPin, DollarSign,
   Share2, Copy, Check, Send, Search, Camera,
-  AlertTriangle, Settings, Wallet, CreditCard
+  AlertTriangle, Settings, Wallet, CreditCard,
+  Pencil, Trash2
 } from 'lucide-react';
 
 interface Props {
@@ -85,6 +86,11 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
   // Share Event / Ticket State
   const [sharingEvent, setSharingEvent] = useState<EventItem | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Edit & Delete Event State
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [editForm, setEditForm] = useState<Partial<EventItem>>({});
+  const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
 
   // Scanner State
   const [scannerSelectedEventId, setScannerSelectedEventId] = useState<string>('');
@@ -300,6 +306,41 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
     setShowCreateEvent(false);
     showAlert(`Event "${newEvt.name}" published!`);
+    refreshOrgData();
+  };
+
+  const handleOpenEditEvent = (evt: EventItem) => {
+    setEditingEvent(evt);
+    setEditForm({
+      name: evt.name,
+      description: evt.description,
+      date: evt.date,
+      startTime: evt.startTime,
+      endTime: evt.endTime,
+      venue: evt.venue,
+      address: evt.address,
+      googleMapsUrl: evt.googleMapsUrl || '',
+      contactPhone: evt.contactPhone,
+      status: evt.status,
+      bannerUrl: evt.bannerUrl,
+    });
+  };
+
+  const handleSaveEditEvent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEvent) return;
+    triggerHaptic('success');
+    firestoreService.updateEvent(editingEvent.id, editForm);
+    setEditingEvent(null);
+    showAlert('Event updated successfully!');
+    refreshOrgData();
+  };
+
+  const handleDeleteEvent = (eventId: string) => {
+    triggerHaptic('error');
+    firestoreService.deleteEvent(eventId);
+    setConfirmDeleteEventId(null);
+    showAlert('Event deleted.');
     refreshOrgData();
   };
 
@@ -578,6 +619,22 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         onClick={() => setShowTicketTypeModal(evt.id)}
                       >
                         <PlusCircle style={{ width: 14, height: 14 }} /> + Ticket Type
+                      </button>
+
+                      <button
+                        className="tg-btn tg-btn--secondary tg-btn--sm"
+                        style={{ flex: 1, minWidth: '90px' }}
+                        onClick={() => handleOpenEditEvent(evt)}
+                      >
+                        <Pencil style={{ width: 13, height: 13 }} /> Edit
+                      </button>
+
+                      <button
+                        className="tg-btn tg-btn--sm"
+                        style={{ flex: 1, minWidth: '90px', background: 'rgba(220,53,69,0.12)', color: 'var(--tg-red)', border: '1px solid rgba(220,53,69,0.25)' }}
+                        onClick={() => setConfirmDeleteEventId(evt.id)}
+                      >
+                        <Trash2 style={{ width: 13, height: 13 }} /> Delete
                       </button>
                     </div>
                   </div>
@@ -1260,6 +1317,105 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               >
                 Confirm Rejection
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Event Modal ──────────────────────────────────────────── */}
+      {editingEvent && (
+        <div className="tg-overlay" onClick={() => setEditingEvent(null)}>
+          <div className="tg-sheet" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="tg-sheet__handle" />
+            <div className="tg-sheet__title">
+              <span>Edit Event</span>
+              <button className="tg-sheet__close" onClick={() => setEditingEvent(null)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveEditEvent} style={{ padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label className="tg-label">Event Name *</label>
+                <input className="tg-input" value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+              </div>
+              <div>
+                <label className="tg-label">Description</label>
+                <textarea className="tg-input" rows={3} style={{ resize: 'none' }} value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label className="tg-label">Date *</label>
+                  <input className="tg-input" type="date" value={editForm.date || ''} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="tg-label">Status</label>
+                  <select className="tg-input" value={editForm.status || 'published'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label className="tg-label">Start Time</label>
+                  <input className="tg-input" type="time" value={editForm.startTime || ''} onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })} />
+                </div>
+                <div>
+                  <label className="tg-label">End Time</label>
+                  <input className="tg-input" type="time" value={editForm.endTime || ''} onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="tg-label">Venue *</label>
+                <input className="tg-input" value={editForm.venue || ''} onChange={(e) => setEditForm({ ...editForm, venue: e.target.value })} required />
+              </div>
+              <div>
+                <label className="tg-label">Address</label>
+                <input className="tg-input" value={editForm.address || ''} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+              </div>
+              <div>
+                <label className="tg-label">Contact Phone</label>
+                <input className="tg-input" type="tel" value={editForm.contactPhone || ''} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })} />
+              </div>
+              <div>
+                <label className="tg-label">Google Maps URL</label>
+                <input className="tg-input" type="url" value={editForm.googleMapsUrl || ''} onChange={(e) => setEditForm({ ...editForm, googleMapsUrl: e.target.value })} />
+              </div>
+              <button type="submit" className="tg-btn tg-btn--primary" style={{ marginTop: 4 }}>
+                <CheckCircle2 style={{ width: 16, height: 16 }} /> Save Changes
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Event Confirmation ─────────────────────────────────── */}
+      {confirmDeleteEventId && (
+        <div className="tg-overlay" onClick={() => setConfirmDeleteEventId(null)}>
+          <div className="tg-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="tg-sheet__handle" />
+            <div className="tg-sheet__title">
+              <span style={{ color: 'var(--tg-red)' }}>Delete Event</span>
+              <button className="tg-sheet__close" onClick={() => setConfirmDeleteEventId(null)}>✕</button>
+            </div>
+            <div style={{ padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', background: 'rgba(220,53,69,0.08)', borderRadius: 'var(--tg-radius)', border: '1px solid rgba(220,53,69,0.2)' }}>
+                <Trash2 style={{ width: 20, height: 20, color: 'var(--tg-red)', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ fontSize: 13, color: 'var(--tg-hint)', lineHeight: 1.6 }}>
+                  This will permanently delete the event and all its data. This action <strong style={{ color: 'var(--tg-text)' }}>cannot be undone</strong>.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="tg-btn tg-btn--secondary" style={{ flex: 1 }} onClick={() => setConfirmDeleteEventId(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="tg-btn"
+                  style={{ flex: 1, background: 'var(--tg-red)', color: '#fff' }}
+                  onClick={() => handleDeleteEvent(confirmDeleteEventId)}
+                >
+                  <Trash2 style={{ width: 14, height: 14 }} /> Delete Event
+                </button>
+              </div>
             </div>
           </div>
         </div>
