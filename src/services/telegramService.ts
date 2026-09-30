@@ -103,12 +103,20 @@ export function initTelegramApp() {
 
 /**
  * Returns a Telegram Mini App deep link for sharing events/tickets.
- * Format: https://t.me/<BOT_USERNAME>?startapp=<startParam>
- * Using ?startapp= opens the Mini App directly with the param in initDataUnsafe.start_param
- * Configure the bot username via VITE_TELEGRAM_BOT_USERNAME in .env
+ *
+ * If VITE_TELEGRAM_APP_SHORTNAME is set (e.g. "tickets"), uses the named app format:
+ *   https://t.me/<BOT>/<APP_SHORTNAME>?startapp=<param>
+ * Otherwise falls back to:
+ *   https://t.me/<BOT>?startapp=<param>
+ *
+ * Configure via VITE_TELEGRAM_BOT_USERNAME and VITE_TELEGRAM_APP_SHORTNAME in .env
  */
 export function getTelegramBotLink(startParam: string): string {
   const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'TicketEt_bot';
+  const appShortName = import.meta.env.VITE_TELEGRAM_APP_SHORTNAME;
+  if (appShortName) {
+    return `https://t.me/${botUsername}/${appShortName}?startapp=${startParam}`;
+  }
   return `https://t.me/${botUsername}?startapp=${startParam}`;
 }
 

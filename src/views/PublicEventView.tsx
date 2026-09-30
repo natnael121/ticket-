@@ -21,7 +21,9 @@ import {
   Send,
   ExternalLink,
   Phone,
-  AlertCircle
+  AlertCircle,
+  Wallet,
+  CreditCard
 } from 'lucide-react';
 
 interface PublicEventViewProps {
