@@ -6,7 +6,7 @@ import { Organization } from '../types';
 import {
   User, Building2, Calendar, CheckCircle2,
   ArrowRight, ArrowLeft, Send, Clock, ShieldAlert, ChevronLeft,
-  XCircle, RefreshCw
+  XCircle, RefreshCw, CreditCard, Wallet
 } from 'lucide-react';
 
 interface Props { onNavigate: (view: string) => void; }
@@ -15,7 +15,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
   const { user, updateUserProfile, switchUserRole } = useAuth();
   const { tgUser, showAlert, triggerHaptic } = useTelegram();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrg, setSubmittedOrg] = useState<Organization | null>(null);
 
@@ -58,6 +58,11 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
     country: 'Ethiopia',
     website: '',
     description: '',
+    telebirrNumber: user?.phone || '',
+    telebirrAccountName: user?.fullName || (tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : ''),
+    bankName: 'CBE (Commercial Bank of Ethiopia)',
+    bankAccountNumber: '',
+    bankAccountName: user?.fullName || (tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : ''),
     eventType: 'Music Festivals, Cultural Concerts & Live Shows',
     expectedEvents: '4 to 8 events per year',
     expectedAttendees: '500 - 2,000 attendees'
@@ -70,7 +75,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     triggerHaptic('impact');
-    if (step < 4) setStep((step + 1) as any);
+    if (step < 5) setStep((step + 1) as any);
   };
 
   const handlePrev = () => {
@@ -96,13 +101,18 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
       ownerPhone: formData.phone,
       ownerEmail: formData.email,
       telegramUserId: formData.telegramUserId,
-      telegramUsername: formData.telegramUsername,
+      telegramUsername: formData.telegramUsername.replace(/^@/, ''),
+      telebirrNumber: formData.telebirrNumber,
+      telebirrAccountName: formData.telebirrAccountName,
+      bankName: formData.bankName,
+      bankAccountNumber: formData.bankAccountNumber,
+      bankAccountName: formData.bankAccountName,
       expectedEvents: formData.expectedEvents,
       expectedAttendees: formData.expectedAttendees
     });
 
     // ✅ Link org to user profile so OrganizationContext can find it
-    updateUserProfile({ organizationId: newOrg.id });
+    updateUserProfile({ organizationId: newOrg.id, telegramUsername: formData.telegramUsername.replace(/^@/, '') });
 
     setIsSubmitting(false);
     setSubmittedOrg(newOrg);
@@ -163,6 +173,11 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
               { label: 'City', value: `${displayOrg.city}, ${displayOrg.country}` },
               { label: 'Owner', value: displayOrg.ownerName },
               { label: 'Phone', value: displayOrg.ownerPhone },
+              { label: 'Telegram User', value: displayOrg.telegramUsername ? `@${displayOrg.telegramUsername}` : 'Not provided' },
+              { label: 'Telebirr Number', value: displayOrg.telebirrNumber || displayOrg.ownerPhone },
+              { label: 'Telebirr Account Name', value: displayOrg.telebirrAccountName || displayOrg.ownerName },
+              { label: 'Bank Name', value: displayOrg.bankName || 'CBE' },
+              { label: 'Bank Account No.', value: displayOrg.bankAccountNumber || 'Not provided' },
               { label: 'Status', value: displayOrg.status.toUpperCase() },
               ...(displayOrg.approvedAt ? [{ label: 'Approved', value: new Date(displayOrg.approvedAt).toLocaleDateString() }] : []),
               ...(displayOrg.rejectionReason ? [{ label: 'Reason', value: displayOrg.rejectionReason }] : []),
@@ -233,12 +248,12 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
           <ChevronLeft style={{ width: 20, height: 20 }} />
         </button>
         <span className="tg-header__title">Register as Organizer</span>
-        <span style={{ fontSize: 12, color: 'var(--tg-hint)', fontWeight: 600 }}>Step {step}/4</span>
+        <span style={{ fontSize: 12, color: 'var(--tg-hint)', fontWeight: 600 }}>Step {step}/5</span>
       </div>
 
       {/* Progress bar */}
       <div style={{ display: 'flex', gap: 4, padding: '10px 12px 0', background: 'var(--tg-bg)' }}>
-        {[1, 2, 3, 4].map((s) => (
+        {[1, 2, 3, 4, 5].map((s) => (
           <div key={s} style={{
             flex: 1, height: 3, borderRadius: 99, transition: 'background 0.3s',
             background: s <= step ? 'var(--tg-accent)' : 'var(--tg-surface)'
@@ -248,11 +263,11 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
 
       <div className="tg-content">
 
-        {/* ── STEP 1: Personal Info ────────────────────────────────── */}
+        {/* ── STEP 1: Personal & Telegram Contact ─────────────────── */}
         {step === 1 && (
           <form onSubmit={handleNext} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="tg-section__header" style={{ padding: '14px 0 4px' }}>
-              Personal Information
+              Personal & Telegram Contact
             </div>
             <div className="tg-section">
               <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)' }}>
@@ -268,12 +283,15 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
                 <input className="tg-input" type="email" name="email" required value={formData.email} onChange={handleChange} placeholder="organizer@company.et" />
               </div>
               <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)' }}>
-                <label className="tg-label">Telegram Username</label>
-                <input className="tg-input" name="telegramUsername" value={formData.telegramUsername} onChange={handleChange} placeholder="@username" />
+                <label className="tg-label">Telegram Username *</label>
+                <input className="tg-input" name="telegramUsername" required value={formData.telegramUsername} onChange={handleChange} placeholder="e.g. bini_events or @bini_events" />
+                <div style={{ fontSize: 11, color: 'var(--tg-hint)', marginTop: 4 }}>
+                  Audience can contact you on Telegram via this handle.
+                </div>
               </div>
               <div style={{ padding: '14px 16px' }}>
-                <label className="tg-label">Telegram User ID</label>
-                <input className="tg-input" name="telegramUserId" value={formData.telegramUserId} onChange={handleChange} placeholder="12345678" />
+                <label className="tg-label">Telegram User ID (Optional)</label>
+                <input className="tg-input" name="telegramUserId" value={formData.telegramUserId} onChange={handleChange} placeholder="e.g. 12345678" />
               </div>
             </div>
             <button type="submit" className="tg-btn tg-btn--primary">
@@ -332,8 +350,71 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
           </form>
         )}
 
-        {/* ── STEP 3: Event Business Info ──────────────────────────── */}
+        {/* ── STEP 3: Payment Accounts Setup (Telebirr & Bank) ────── */}
         {step === 3 && (
+          <form onSubmit={handleNext} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="tg-section__header" style={{ padding: '14px 0 4px' }}>
+              Payment Information (Telebirr & Bank)
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--tg-hint)', margin: '0 0 4px' }}>
+              Ticket buyers will see these payment details when purchasing tickets for your events.
+            </p>
+
+            {/* Telebirr Details */}
+            <div className="tg-section">
+              <div style={{ padding: '12px 16px', background: 'rgba(36,129,204,0.08)', fontWeight: 700, fontSize: 14, color: 'var(--tg-accent)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Wallet style={{ width: 18, height: 18 }} /> Telebirr Details
+              </div>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)' }}>
+                <label className="tg-label">Telebirr Phone / Account Number *</label>
+                <input className="tg-input" type="tel" name="telebirrNumber" required value={formData.telebirrNumber} onChange={handleChange} placeholder="+251911234567" />
+              </div>
+              <div style={{ padding: '14px 16px' }}>
+                <label className="tg-label">Telebirr Account Holder Name *</label>
+                <input className="tg-input" name="telebirrAccountName" required value={formData.telebirrAccountName} onChange={handleChange} placeholder="e.g. Biniyam Worku" />
+              </div>
+            </div>
+
+            {/* Bank Transfer Details */}
+            <div className="tg-section">
+              <div style={{ padding: '12px 16px', background: 'rgba(77,205,94,0.08)', fontWeight: 700, fontSize: 14, color: 'var(--tg-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CreditCard style={{ width: 18, height: 18 }} /> Bank Transfer Details
+              </div>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)' }}>
+                <label className="tg-label">Bank Name *</label>
+                <select className="tg-input" name="bankName" value={formData.bankName} onChange={handleChange} style={{ appearance: 'none' }}>
+                  <option>CBE (Commercial Bank of Ethiopia)</option>
+                  <option>Dashen Bank</option>
+                  <option>Awash Bank</option>
+                  <option>Bank of Abyssinia (BOA)</option>
+                  <option>Hibret Bank</option>
+                  <option>Nib International Bank</option>
+                  <option>Wegagen Bank</option>
+                  <option>Cooperative Bank of Oromia</option>
+                  <option>Other Bank</option>
+                </select>
+              </div>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tg-divider)' }}>
+                <label className="tg-label">Bank Account Number *</label>
+                <input className="tg-input" name="bankAccountNumber" required value={formData.bankAccountNumber} onChange={handleChange} placeholder="1000123456789" />
+              </div>
+              <div style={{ padding: '14px 16px' }}>
+                <label className="tg-label">Bank Account Holder Name *</label>
+                <input className="tg-input" name="bankAccountName" required value={formData.bankAccountName} onChange={handleChange} placeholder="e.g. Addis Events PLC or Biniyam Worku" />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="tg-btn tg-btn--secondary" style={{ flex: '0 0 80px' }} onClick={handlePrev}>Back</button>
+              <button type="submit" className="tg-btn tg-btn--primary" style={{ flex: 1 }}>
+                Continue <ArrowRight style={{ width: 18, height: 18 }} />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ── STEP 4: Event Business Info ──────────────────────────── */}
+        {step === 4 && (
           <form onSubmit={handleNext} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="tg-section__header" style={{ padding: '14px 0 4px' }}>
               Event Business Information
@@ -371,8 +452,8 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
           </form>
         )}
 
-        {/* ── STEP 4: Review & Submit ──────────────────────────────── */}
-        {step === 4 && (
+        {/* ── STEP 5: Review & Submit ──────────────────────────────── */}
+        {step === 5 && (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="tg-section__header" style={{ padding: '14px 0 4px' }}>
               Review & Submit
@@ -382,13 +463,7 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
               <div className="tg-cell" style={{ cursor: 'default' }}>
                 <div className="tg-cell__body">
                   <div className="tg-cell__subtitle">Organization</div>
-                  <div className="tg-cell__title">{formData.companyName}</div>
-                </div>
-              </div>
-              <div className="tg-cell" style={{ cursor: 'default' }}>
-                <div className="tg-cell__body">
-                  <div className="tg-cell__subtitle">Type & City</div>
-                  <div className="tg-cell__title">{formData.organizationType} · {formData.city}</div>
+                  <div className="tg-cell__title">{formData.companyName} ({formData.organizationType})</div>
                 </div>
               </div>
               <div className="tg-cell" style={{ cursor: 'default' }}>
@@ -396,6 +471,25 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
                   <div className="tg-cell__subtitle">Owner / Contact</div>
                   <div className="tg-cell__title">{formData.fullName}</div>
                   <div className="tg-cell__subtitle">{formData.phone} · {formData.email}</div>
+                  {formData.telegramUsername && (
+                    <div style={{ fontSize: 13, color: 'var(--tg-accent)', fontWeight: 600, marginTop: 2 }}>
+                      Telegram: @{formData.telegramUsername.replace(/^@/, '')}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="tg-cell" style={{ cursor: 'default' }}>
+                <div className="tg-cell__body">
+                  <div className="tg-cell__subtitle">Telebirr Information</div>
+                  <div className="tg-cell__title">{formData.telebirrNumber}</div>
+                  <div className="tg-cell__subtitle">Name: {formData.telebirrAccountName}</div>
+                </div>
+              </div>
+              <div className="tg-cell" style={{ cursor: 'default' }}>
+                <div className="tg-cell__body">
+                  <div className="tg-cell__subtitle">Bank Account Information</div>
+                  <div className="tg-cell__title">{formData.bankName}</div>
+                  <div className="tg-cell__subtitle">Account: {formData.bankAccountNumber} ({formData.bankAccountName})</div>
                 </div>
               </div>
               <div className="tg-cell" style={{ cursor: 'default' }}>
@@ -430,3 +524,4 @@ export const OrganizerRegistrationView: React.FC<Props> = ({ onNavigate }) => {
     </div>
   );
 };
+

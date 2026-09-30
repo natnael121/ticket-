@@ -101,6 +101,16 @@ export function initTelegramApp() {
   }
 }
 
+/**
+ * Returns a Telegram bot deep link for sharing events/tickets.
+ * Format: https://t.me/<BOT_USERNAME>?start=<startParam>
+ * Configure the bot username via VITE_TELEGRAM_BOT_USERNAME in .env
+ */
+export function getTelegramBotLink(startParam: string): string {
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'TicketEt_bot';
+  return `https://t.me/${botUsername}?start=${startParam}`;
+}
+
 export function getTelegramUser() {
   const tg = getTelegramWebApp();
   return tg?.initDataUnsafe?.user || null;

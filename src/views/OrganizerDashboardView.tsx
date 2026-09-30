@@ -4,6 +4,7 @@ import { useTelegram } from '../contexts/TelegramContext';
 import { useAuth } from '../contexts/AuthContext';
 import { firestoreService } from '../services/firestoreService';
 import { processTicketCheckIn, CheckInResult } from '../services/ticketService';
+import { getTelegramBotLink } from '../services/telegramService';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
 import { PaymentSubmission, EventItem, TicketType, EVENT_CATEGORIES } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
@@ -15,7 +16,7 @@ import {
   Users, TrendingUp, AlertCircle, ChevronLeft,
   ExternalLink, Clock, MapPin, DollarSign,
   Share2, Copy, Check, Send, Search, Camera,
-  AlertTriangle
+  AlertTriangle, Settings, Wallet, CreditCard
 } from 'lucide-react';
 
 interface Props {
@@ -31,11 +32,55 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { triggerHaptic, showAlert } = useTelegram();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'payments' | 'scanner' | 'tickets' | 'analytics'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'payments' | 'scanner' | 'tickets' | 'analytics' | 'settings'>('events');
   const [selectedPayment, setSelectedPayment] = useState<PaymentSubmission | null>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showTicketTypeModal, setShowTicketTypeModal] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Settings state
+  const [settingsForm, setSettingsForm] = useState({
+    name: currentOrganization?.name || '',
+    telegramUsername: currentOrganization?.telegramUsername || '',
+    telebirrNumber: currentOrganization?.telebirrNumber || currentOrganization?.ownerPhone || '',
+    telebirrAccountName: currentOrganization?.telebirrAccountName || currentOrganization?.ownerName || '',
+    bankName: currentOrganization?.bankName || 'CBE (Commercial Bank of Ethiopia)',
+    bankAccountNumber: currentOrganization?.bankAccountNumber || '',
+    bankAccountName: currentOrganization?.bankAccountName || currentOrganization?.ownerName || ''
+  });
+
+  useEffect(() => {
+    if (currentOrganization) {
+      setSettingsForm({
+        name: currentOrganization.name || '',
+        telegramUsername: currentOrganization.telegramUsername || '',
+        telebirrNumber: currentOrganization.telebirrNumber || currentOrganization.ownerPhone || '',
+        telebirrAccountName: currentOrganization.telebirrAccountName || currentOrganization.ownerName || '',
+        bankName: currentOrganization.bankName || 'CBE (Commercial Bank of Ethiopia)',
+        bankAccountNumber: currentOrganization.bankAccountNumber || '',
+        bankAccountName: currentOrganization.bankAccountName || currentOrganization.ownerName || ''
+      });
+    }
+  }, [currentOrganization?.id]);
+
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOrganization) return;
+    triggerHaptic('success');
+
+    firestoreService.updateOrganization(currentOrganization.id, {
+      name: settingsForm.name,
+      telegramUsername: settingsForm.telegramUsername.replace(/^@/, ''),
+      telebirrNumber: settingsForm.telebirrNumber,
+      telebirrAccountName: settingsForm.telebirrAccountName,
+      bankName: settingsForm.bankName,
+      bankAccountNumber: settingsForm.bankAccountNumber,
+      bankAccountName: settingsForm.bankAccountName
+    });
+
+    showAlert('Payment & Profile settings updated successfully!');
+    refreshOrgData();
+  };
 
   // Share Event / Ticket State
   const [sharingEvent, setSharingEvent] = useState<EventItem | null>(null);
@@ -281,7 +326,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
   };
 
   const shareUrl = sharingEvent
-    ? `${window.location.origin}/?event=${sharingEvent.id}`
+    ? getTelegramBotLink(`event_${sharingEvent.id}`)
     : '';
 
   const handleCopyShareLink = () => {
@@ -438,6 +483,7 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
             { key: 'scanner' as const, label: 'Scan Tickets', count: 0 },
             { key: 'tickets' as const, label: `Tickets (${allTickets.length})`, count: 0 },
             { key: 'analytics' as const, label: 'Analytics', count: 0 },
+            { key: 'settings' as const, label: 'Payment & Profile', count: 0 },
           ]).map(({ key, label, count }) => (
             <button key={key} className={`tg-tab ${activeTab === key ? 'active' : ''}`} onClick={() => setActiveTab(key)}>
               {label}
@@ -718,6 +764,119 @@ export const OrganizerDashboardView: React.FC<Props> = ({ onNavigate }) => {
               <div style={{ fontSize: 13, color: 'var(--tg-hint)', marginTop: 8 }}>{checkedIn} of {totalTicketsSold} tickets scanned</div>
             </div>
           </div>
+        )}
+
+        {/* ── Settings Tab (Payment & Telegram Profile) ─────────────────── */}
+        {activeTab === 'settings' && (
+          <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--tg-text)', marginBottom: 4 }}>
+                Organization & Payment Settings
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--tg-hint)', margin: 0 }}>
+                Manage the Telegram user handle, Telebirr, and Bank details displayed to audience members when buying tickets.
+              </p>
+            </div>
+
+            {/* Telegram Handle */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--tg-accent)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Send style={{ width: 16, height: 16 }} /> Telegram Handle
+              </div>
+              <div>
+                <label className="tg-label">Telegram Username *</label>
+                <input
+                  className="tg-input"
+                  required
+                  value={settingsForm.telegramUsername}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, telegramUsername: e.target.value })}
+                  placeholder="e.g. my_event_org or @my_event_org"
+                />
+              </div>
+            </div>
+
+            {/* Telebirr Info */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--tg-accent)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Wallet style={{ width: 16, height: 16 }} /> Telebirr Account Details
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <label className="tg-label">Telebirr Phone / Account Number *</label>
+                  <input
+                    className="tg-input"
+                    type="tel"
+                    required
+                    value={settingsForm.telebirrNumber}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, telebirrNumber: e.target.value })}
+                    placeholder="+251911234567"
+                  />
+                </div>
+                <div>
+                  <label className="tg-label">Telebirr Account Holder Name *</label>
+                  <input
+                    className="tg-input"
+                    required
+                    value={settingsForm.telebirrAccountName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, telebirrAccountName: e.target.value })}
+                    placeholder="e.g. Abebe Kebede"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Info */}
+            <div style={{ background: 'var(--tg-bg)', borderRadius: 'var(--tg-radius-lg)', padding: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--tg-green)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CreditCard style={{ width: 16, height: 16 }} /> Bank Transfer Details
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <label className="tg-label">Bank Name *</label>
+                  <select
+                    className="tg-input"
+                    value={settingsForm.bankName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, bankName: e.target.value })}
+                    style={{ appearance: 'none' }}
+                  >
+                    <option>CBE (Commercial Bank of Ethiopia)</option>
+                    <option>Dashen Bank</option>
+                    <option>Awash Bank</option>
+                    <option>Bank of Abyssinia (BOA)</option>
+                    <option>Hibret Bank</option>
+                    <option>Nib International Bank</option>
+                    <option>Wegagen Bank</option>
+                    <option>Cooperative Bank of Oromia</option>
+                    <option>Other Bank</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="tg-label">Bank Account Number *</label>
+                  <input
+                    className="tg-input"
+                    required
+                    value={settingsForm.bankAccountNumber}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, bankAccountNumber: e.target.value })}
+                    placeholder="1000123456789"
+                  />
+                </div>
+                <div>
+                  <label className="tg-label">Bank Account Holder Name *</label>
+                  <input
+                    className="tg-input"
+                    required
+                    value={settingsForm.bankAccountName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, bankAccountName: e.target.value })}
+                    placeholder="e.g. Addis Events PLC or Abebe Kebede"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" className="tg-btn tg-btn--primary" style={{ marginTop: 4 }}>
+              Save Payment & Profile Settings
+            </button>
+          </form>
         )}
 
         <div className="spacer-16" />

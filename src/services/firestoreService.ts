@@ -447,20 +447,31 @@ export class FirestoreService {
   }
 
   public addOrganization(
-    org: Omit<Organization, 'id' | 'createdAt' | 'status' | 'paymentMethods'>
+    org: Omit<Organization, 'id' | 'createdAt' | 'status' | 'paymentMethods'> & {
+      paymentMethods?: PaymentMethodConfig[];
+    }
   ): Organization {
+    const paymentMethods: PaymentMethodConfig[] = org.paymentMethods || [
+      {
+        id: `pm_tele_${Date.now()}`,
+        type: 'Telebirr',
+        accountName: org.telebirrAccountName || org.ownerName || org.name,
+        accountNumber: org.telebirrNumber || org.ownerPhone
+      },
+      ...(org.bankAccountNumber ? [{
+        id: `pm_bank_${Date.now()}`,
+        type: 'Bank Transfer' as const,
+        bankName: org.bankName || 'CBE (Commercial Bank of Ethiopia)',
+        accountName: org.bankAccountName || org.ownerName || org.name,
+        accountNumber: org.bankAccountNumber
+      }] : [])
+    ];
+
     const newOrg: Organization = {
       ...org,
       id: `org_${Date.now()}`,
       status: 'pending',
-      paymentMethods: [
-        {
-          id: `pm_${Date.now()}`,
-          type: 'Telebirr',
-          accountName: org.name,
-          accountNumber: org.ownerPhone
-        }
-      ],
+      paymentMethods,
       createdAt: new Date().toISOString()
     };
     this.state.organizations.unshift(newOrg);
@@ -470,6 +481,51 @@ export class FirestoreService {
       setDoc(doc(db, 'organizations', newOrg.id), sanitize(newOrg))
     );
     return newOrg;
+  }
+
+  public updateOrganization(
+    orgId: string,
+    updates: Partial<Organization>
+  ): Organization | undefined {
+    const idx = (this.state.organizations || []).findIndex((o) => o.id === orgId);
+    if (idx >= 0) {
+      const existing = this.state.organizations[idx];
+      const merged = { ...existing, ...updates };
+
+      // Re-generate / update paymentMethods if telebirr or bank info was modified
+      const teleNum = merged.telebirrNumber || merged.ownerPhone;
+      const teleName = merged.telebirrAccountName || merged.ownerName || merged.name;
+      const bankName = merged.bankName || 'CBE (Commercial Bank of Ethiopia)';
+      const bankNum = merged.bankAccountNumber;
+      const bankAccName = merged.bankAccountName || merged.ownerName || merged.name;
+
+      const updatedPaymentMethods: PaymentMethodConfig[] = [
+        {
+          id: existing.paymentMethods?.find(p => p.type === 'Telebirr')?.id || `pm_tele_${Date.now()}`,
+          type: 'Telebirr',
+          accountName: teleName,
+          accountNumber: teleNum
+        },
+        ...(bankNum ? [{
+          id: existing.paymentMethods?.find(p => p.type === 'Bank Transfer')?.id || `pm_bank_${Date.now()}`,
+          type: 'Bank Transfer' as const,
+          bankName,
+          accountName: bankAccName,
+          accountNumber: bankNum
+        }] : [])
+      ];
+
+      merged.paymentMethods = updatedPaymentMethods;
+      this.state.organizations[idx] = merged;
+
+      this.saveCachedState();
+      this.notify();
+      this.fsWrite(`updateOrganization(${orgId})`, () =>
+        updateDoc(doc(db, 'organizations', orgId), sanitize(updates))
+      );
+      return merged;
+    }
+    return undefined;
   }
 
   public updateOrganizationStatus(

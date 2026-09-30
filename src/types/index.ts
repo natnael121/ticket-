@@ -28,6 +28,7 @@ export interface PaymentMethodConfig {
   type: 'Telebirr' | 'CBE Birr' | 'Bank Transfer' | 'Other';
   accountName: string;
   accountNumber: string;
+  bankName?: string;
   qrCodeUrl?: string;
   instructions?: string;
 }
@@ -47,6 +48,11 @@ export interface Organization {
   ownerEmail: string;
   telegramUserId?: string;
   telegramUsername?: string;
+  telebirrNumber?: string;
+  telebirrAccountName?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
   status: OrganizationStatus;
   rejectionReason?: string;
   paymentMethods: PaymentMethodConfig[];

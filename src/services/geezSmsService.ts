@@ -5,6 +5,7 @@
  */
 
 import { DigitalTicket } from '../types';
+import { getTelegramBotLink } from './telegramService';
 
 const GEEZSMS_ENDPOINT =
   import.meta.env.VITE_GEEZSMS_ENDPOINT || 'https://api.geezsms.com/api/v1/sms/send';
@@ -99,8 +100,7 @@ export async function sendGeezSMS(phone: string, message: string): Promise<GeezS
  * Helper to construct and send a SMS ticket notification for an issued digital ticket
  */
 export async function sendTicketSmsNotification(ticket: DigitalTicket): Promise<GeezSmsResponse> {
-  const host = typeof window !== 'undefined' ? window.location.origin : 'https://ticketet.app';
-  const ticketUrl = `${host}/?event=${ticket.eventId}`;
+  const ticketUrl = getTelegramBotLink(`event_${ticket.eventId}`);
 
   const message =
     `🎟️ TicketEt Confirmation!\n` +

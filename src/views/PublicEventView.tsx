@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { ImgBBImageUploader } from '../components/common/ImgBBImageUploader';
 import { TicketType } from '../types';
 import { QRCodeSVG } from 'qrcode.react';
+import { getTelegramBotLink } from '../services/telegramService';
+
 import {
   Calendar,
   MapPin,
@@ -73,8 +75,8 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
   const totalPrice = activeTicket ? activeTicket.price * quantity : 0;
 
   const shareUrl = event
-    ? `${window.location.origin}/?event=${event.id}`
-    : window.location.href;
+    ? getTelegramBotLink(`event_${event.id}`)
+    : getTelegramBotLink('start');
 
   const handleCopyLink = () => {
     triggerHaptic('success');
@@ -489,30 +491,183 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
             </div>
 
             <form onSubmit={handleFinalSubmitPayment} style={{ padding: '8px 16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              
+              {/* Telegram Contact Banner (If organizer provided Telegram handle) */}
+              {(organization?.telegramUsername || event.contactPhone) && (
+                <div style={{ background: 'rgba(36,129,204,0.1)', border: '1px solid rgba(36,129,204,0.3)', borderRadius: 'var(--tg-radius-lg)', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Send style={{ width: 18, height: 18, color: 'var(--tg-accent)', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tg-accent)' }}>Organizer Telegram Contact</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tg-text)' }}>
+                        {organization?.telegramUsername ? `@${organization.telegramUsername.replace(/^@/, '')}` : event.contactPhone}
+                      </div>
+                    </div>
+                  </div>
+                  {organization?.telegramUsername && (
+                    <a
+                      href={`https://t.me/${organization.telegramUsername.replace(/^@/, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: 'var(--tg-accent)',
+                        color: '#fff',
+                        borderRadius: 'var(--tg-radius-sm)',
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <Send size={12} /> Contact
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Payment Method Selector */}
+              <div>
+                <label className="tg-label" style={{ marginBottom: 8, display: 'block' }}>Choose Payment Method *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => { triggerHaptic('impact'); setSelectedPaymentMethod('Telebirr'); }}
+                    style={{
+                      background: selectedPaymentMethod === 'Telebirr' ? 'rgba(36,129,204,0.15)' : 'var(--tg-surface)',
+                      border: selectedPaymentMethod === 'Telebirr' ? '2px solid var(--tg-accent)' : '1px solid var(--tg-card-border)',
+                      borderRadius: 'var(--tg-radius)',
+                      padding: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      fontWeight: 700,
+                      fontSize: 14,
+                      color: selectedPaymentMethod === 'Telebirr' ? 'var(--tg-accent)' : 'var(--tg-text)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Wallet size={18} /> Telebirr
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { triggerHaptic('impact'); setSelectedPaymentMethod('Bank Transfer'); }}
+                    style={{
+                      background: selectedPaymentMethod === 'Bank Transfer' ? 'rgba(77,205,94,0.15)' : 'var(--tg-surface)',
+                      border: selectedPaymentMethod === 'Bank Transfer' ? '2px solid var(--tg-green)' : '1px solid var(--tg-card-border)',
+                      borderRadius: 'var(--tg-radius)',
+                      padding: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      fontWeight: 700,
+                      fontSize: 14,
+                      color: selectedPaymentMethod === 'Bank Transfer' ? 'var(--tg-green)' : 'var(--tg-text)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <CreditCard size={18} /> Bank Transfer
+                  </button>
+                </div>
+              </div>
+
               {/* Payment Account Details Card */}
-              <div style={{ background: 'var(--tg-bg2)', borderRadius: 'var(--tg-radius-lg)', padding: '14px 16px', border: '1px solid var(--tg-accent)' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tg-accent)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>
-                  Organizer Payment Account
+              <div style={{
+                background: 'var(--tg-bg2)',
+                borderRadius: 'var(--tg-radius-lg)',
+                padding: '14px 16px',
+                border: selectedPaymentMethod === 'Bank Transfer' ? '1.5px solid var(--tg-green)' : '1.5px solid var(--tg-accent)'
+              }}>
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: selectedPaymentMethod === 'Bank Transfer' ? 'var(--tg-green)' : 'var(--tg-accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                  marginBottom: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>{selectedPaymentMethod === 'Bank Transfer' ? 'Bank Account Details' : 'Telebirr Payment Details'}</span>
+                  <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 99 }}>Official</span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
-                    <span style={{ color: 'var(--tg-hint)' }}>Payment Method:</span>
-                    <strong style={{ color: 'var(--tg-text)' }}>{selectedPaymentMethod}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
-                    <span style={{ color: 'var(--tg-hint)' }}>Account Name:</span>
-                    <strong style={{ color: 'var(--tg-text)' }}>{organization?.name || event.organizationName}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--tg-hint)' }}>Account Number:</span>
-                    <strong style={{ color: 'var(--tg-accent)', fontFamily: 'monospace', fontSize: 15 }}>
-                      {organization?.paymentMethods[0]?.accountNumber || organization?.ownerPhone || '+251911234567'}
-                    </strong>
-                  </div>
+                  {selectedPaymentMethod === 'Bank Transfer' ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
+                        <span style={{ color: 'var(--tg-hint)' }}>Bank Name:</span>
+                        <strong style={{ color: 'var(--tg-text)', fontSize: 14 }}>
+                          {organization?.bankName || organization?.paymentMethods?.find(p => p.type === 'Bank Transfer')?.bankName || 'CBE (Commercial Bank of Ethiopia)'}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--tg-hint)' }}>Account Number:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong style={{ color: 'var(--tg-green)', fontFamily: 'monospace', fontSize: 16 }}>
+                            {organization?.bankAccountNumber || organization?.paymentMethods?.find(p => p.type === 'Bank Transfer')?.accountNumber || '1000123456789'}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const num = organization?.bankAccountNumber || organization?.paymentMethods?.find(p => p.type === 'Bank Transfer')?.accountNumber || '1000123456789';
+                              triggerHaptic('success');
+                              navigator.clipboard.writeText(num);
+                              showAlert('Bank account number copied to clipboard!');
+                            }}
+                            style={{ background: 'rgba(77,205,94,0.15)', color: 'var(--tg-green)', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
+                        <span style={{ color: 'var(--tg-hint)' }}>Account Name:</span>
+                        <strong style={{ color: 'var(--tg-text)' }}>
+                          {organization?.bankAccountName || organization?.paymentMethods?.find(p => p.type === 'Bank Transfer')?.accountName || organization?.name}
+                        </strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--tg-hint)' }}>Telebirr Number:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong style={{ color: 'var(--tg-accent)', fontFamily: 'monospace', fontSize: 16 }}>
+                            {organization?.telebirrNumber || organization?.paymentMethods?.find(p => p.type === 'Telebirr')?.accountNumber || organization?.ownerPhone || '+251911234567'}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const num = organization?.telebirrNumber || organization?.paymentMethods?.find(p => p.type === 'Telebirr')?.accountNumber || organization?.ownerPhone || '+251911234567';
+                              triggerHaptic('success');
+                              navigator.clipboard.writeText(num);
+                              showAlert('Telebirr number copied to clipboard!');
+                            }}
+                            style={{ background: 'rgba(36,129,204,0.15)', color: 'var(--tg-accent)', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--tg-divider)' }}>
+                        <span style={{ color: 'var(--tg-hint)' }}>Account Holder:</span>
+                        <strong style={{ color: 'var(--tg-text)' }}>
+                          {organization?.telebirrAccountName || organization?.paymentMethods?.find(p => p.type === 'Telebirr')?.accountName || organization?.ownerName || organization?.name}
+                        </strong>
+                      </div>
+                    </>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--tg-hint)' }}>Exact Amount:</span>
-                    <strong style={{ color: 'var(--tg-green)', fontFamily: 'monospace', fontSize: 16 }}>
+                    <span style={{ color: 'var(--tg-hint)' }}>Total Payment Due:</span>
+                    <strong style={{ color: 'var(--tg-green)', fontFamily: 'monospace', fontSize: 17 }}>
                       {totalPrice === 0 ? 'FREE' : `${totalPrice.toLocaleString()} ETB`}
                     </strong>
                   </div>
@@ -524,7 +679,7 @@ export const PublicEventView: React.FC<PublicEventViewProps> = ({ eventId, onNav
                 label="Upload Payment Receipt Screenshot *"
                 value={screenshotUrl}
                 onChange={(url) => setScreenshotUrl(url)}
-                placeholder="Upload screenshot of Telebirr or CBE receipt"
+                placeholder={`Upload screenshot of your ${selectedPaymentMethod} transfer receipt`}
               />
 
               <button
